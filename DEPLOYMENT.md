@@ -67,7 +67,69 @@ npm --version
 
 ---
 
-## 🌐 Étape 4: Installation et configuration de Nginx
+## 🗄️ Étape 4: Installation et configuration de MySQL
+
+### 4.1 Installation de MySQL Server
+
+```bash
+apt install -y mysql-server
+```
+
+### 4.2 Sécurisation de MySQL (optionnel mais recommandé)
+
+```bash
+mysql_secure_installation
+```
+
+Répondez aux questions:
+- **Valider le mot de passe?** → `Y` puis entrez un mot de passe root fort
+- **Supprimer les utilisateurs anonymes?** → `Y`
+- **Désactiver la connexion root à distance?** → `Y`
+- **Supprimer la base de test?** → `Y`
+- **Recharger les privilèges?** → `Y`
+
+### 4.3 Création de la base de données et de l'utilisateur
+
+```bash
+mysql -u root -p
+```
+
+Dans le prompt MySQL, exécutez les commandes suivantes (remplacez `your_secure_password` par un mot de passe fort):
+
+```sql
+-- Créer la base de données
+CREATE DATABASE form_defense_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- Créer l'utilisateur
+CREATE USER 'form_defense_user'@'localhost' IDENTIFIED BY 'your_secure_password';
+
+-- Accorder les privilèges
+GRANT ALL PRIVILEGES ON form_defense_db.* TO 'form_defense_user'@'localhost';
+
+-- Appliquer les changements
+FLUSH PRIVILEGES;
+
+-- Quitter MySQL
+EXIT;
+```
+
+### 4.4 Installation des dépendances pour mysqlclient
+
+```bash
+apt install -y default-libmysqlclient-dev pkg-config
+```
+
+### 4.5 Vérification de l'installation
+
+```bash
+mysql -u form_defense_user -p form_defense_db
+# Entrez le mot de passe que vous avez défini
+# Si la connexion fonctionne, tapez EXIT;
+```
+
+---
+
+## 🌐 Étape 5: Installation et configuration de Nginx
 
 ### 4.1 Installation de Nginx
 
@@ -90,7 +152,7 @@ systemctl status nginx
 
 ---
 
-## 📁 Étape 5: Configuration de la structure du projet
+## 📁 Étape 6: Configuration de la structure du projet
 
 ### 5.1 Création des répertoires
 
@@ -116,7 +178,7 @@ ls -la
 
 ---
 
-## 🔙 Étape 6: Configuration du Backend Django
+## 🔙 Étape 7: Configuration du Backend Django
 
 ### 6.1 Création de l'environnement virtuel Python
 
@@ -126,20 +188,22 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-### 6.2 Installation des dépendances Python
+### 7.2 Installation des dépendances Python
+
+**Note:** L'installation de `mysqlclient` peut prendre quelques minutes car il compile depuis les sources.
 
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 6.3 Installation de Gunicorn (serveur WSGI)
+### 7.3 Installation de Gunicorn (serveur WSGI)
 
 ```bash
 pip install gunicorn
 ```
 
-### 6.4 Création du fichier .env pour les variables d'environnement
+### 7.4 Création du fichier .env pour les variables d'environnement
 
 ```bash
 cd /var/www/form-defense/backend
@@ -152,7 +216,18 @@ nano .env
 SECRET_KEY=votre-secret-key-tres-longue-et-securisee-generee-aleatoirement
 DEBUG=False
 ALLOWED_HOSTS=64.31.4.29,votre-domaine.com
+CORS_ALLOWED_ORIGINS=http://64.31.4.29,https://votre-domaine.com
+
+# Configuration MySQL
+USE_MYSQL=True
+DB_NAME=form_defense_db
+DB_USER=form_defense_user
+DB_PASSWORD=votre-mot-de-passe-mysql-securise
+DB_HOST=localhost
+DB_PORT=3306
 ```
+
+**⚠️ IMPORTANT:** Remplacez `votre-mot-de-passe-mysql-securise` par le mot de passe que vous avez défini lors de la création de l'utilisateur MySQL à l'étape 4.3.
 
 **Générer une SECRET_KEY sécurisée:**
 
@@ -160,7 +235,19 @@ ALLOWED_HOSTS=64.31.4.29,votre-domaine.com
 python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
-### 6.5 Modification de settings.py pour la production
+### 7.5 Vérification de la connexion à MySQL
+
+Avant de continuer, testez la connexion:
+
+```bash
+cd /var/www/form-defense/backend
+source venv/bin/activate
+python manage.py dbshell
+```
+
+Si la connexion fonctionne, vous verrez le prompt MySQL. Tapez `exit;` pour quitter.
+
+### 7.6 Modification de settings.py pour la production
 
 ```bash
 cd /var/www/form-defense/backend/config
@@ -187,7 +274,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 ```
 
-### 6.6 Application des migrations
+### 7.7 Application des migrations
 
 ```bash
 cd /var/www/form-defense/backend
@@ -195,13 +282,13 @@ source venv/bin/activate
 python manage.py migrate
 ```
 
-### 6.7 Collecte des fichiers statiques
+### 7.8 Collecte des fichiers statiques
 
 ```bash
 python manage.py collectstatic --noinput
 ```
 
-### 6.8 Création d'un superutilisateur (optionnel)
+### 7.9 Création d'un superutilisateur (optionnel)
 
 ```bash
 python manage.py createsuperuser
@@ -209,16 +296,16 @@ python manage.py createsuperuser
 
 ---
 
-## 🎨 Étape 7: Configuration du Frontend Next.js
+## 🎨 Étape 8: Configuration du Frontend Next.js
 
-### 7.1 Installation des dépendances Node.js
+### 8.1 Installation des dépendances Node.js
 
 ```bash
 cd /var/www/form-defense/frontend
 npm install
 ```
 
-### 7.2 Modification de l'URL de l'API dans le frontend
+### 8.2 Modification de l'URL de l'API dans le frontend
 
 ```bash
 cd /var/www/form-defense/frontend/app
@@ -236,7 +323,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://64.31.4.29:8000';
 const response = await fetch(`${API_URL}/api/entries/`, {
 ```
 
-### 7.3 Création du fichier .env.local
+### 8.3 Création du fichier .env.local
 
 ```bash
 cd /var/www/form-defense/frontend
@@ -249,7 +336,7 @@ nano .env.local
 NEXT_PUBLIC_API_URL=http://64.31.4.29:8000
 ```
 
-### 7.4 Build de l'application Next.js
+### 8.4 Build de l'application Next.js
 
 ```bash
 cd /var/www/form-defense/frontend
@@ -258,9 +345,9 @@ npm run build
 
 ---
 
-## ⚙️ Étape 8: Configuration de Systemd pour les services
+## ⚙️ Étape 9: Configuration de Systemd pour les services
 
-### 8.1 Création du service Gunicorn pour Django
+### 9.1 Création du service Gunicorn pour Django
 
 ```bash
 nano /etc/systemd/system/form-defense-backend.service
@@ -291,7 +378,7 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-### 8.2 Création du service Next.js
+### 9.2 Création du service Next.js
 
 ```bash
 nano /etc/systemd/system/form-defense-frontend.service
@@ -318,7 +405,7 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-### 8.3 Activation et démarrage des services
+### 9.3 Activation et démarrage des services
 
 ```bash
 # Recharger systemd
@@ -339,9 +426,9 @@ systemctl status form-defense-frontend
 
 ---
 
-## 🔒 Étape 9: Configuration de Nginx
+## 🔒 Étape 10: Configuration de Nginx
 
-### 9.1 Création de la configuration Nginx
+### 10.1 Création de la configuration Nginx
 
 ```bash
 nano /etc/nginx/sites-available/form-defense
@@ -425,7 +512,7 @@ server {
 }
 ```
 
-### 9.2 Activation de la configuration
+### 10.2 Activation de la configuration
 
 ```bash
 # Créer le lien symbolique
@@ -443,9 +530,9 @@ systemctl reload nginx
 
 ---
 
-## 🔥 Étape 10: Configuration du Firewall (UFW)
+## 🔥 Étape 11: Configuration du Firewall (UFW)
 
-### 10.1 Configuration des règles de pare-feu
+### 11.1 Configuration des règles de pare-feu
 
 ```bash
 # Autoriser SSH (IMPORTANT: faites-le en premier!)
@@ -466,9 +553,9 @@ ufw status
 
 ---
 
-## ✅ Étape 11: Vérification et Tests
+## ✅ Étape 12: Vérification et Tests
 
-### 11.1 Vérifier que les services fonctionnent
+### 12.1 Vérifier que les services fonctionnent
 
 ```bash
 # Vérifier le backend
@@ -482,7 +569,7 @@ curl http://64.31.4.29/api/entries/
 curl http://64.31.4.29/
 ```
 
-### 11.2 Vérifier les logs en cas de problème
+### 12.2 Vérifier les logs en cas de problème
 
 ```bash
 # Logs backend
@@ -498,9 +585,9 @@ tail -f /var/log/nginx/form-defense-access.log
 
 ---
 
-## 🔄 Étape 12: Commandes de maintenance
+## 🔄 Étape 13: Commandes de maintenance
 
-### 12.0 Script de déploiement automatique (optionnel)
+### 13.0 Script de déploiement automatique (optionnel)
 
 Un script `deploy.sh` est disponible pour automatiser les mises à jour:
 
@@ -518,7 +605,7 @@ Ce script:
 - Build le frontend
 - Redémarre tous les services
 
-### 12.1 Redémarrer les services
+### 13.1 Redémarrer les services
 
 ```bash
 # Redémarrer le backend
@@ -531,7 +618,7 @@ systemctl restart form-defense-frontend
 systemctl restart nginx
 ```
 
-### 12.2 Mettre à jour le code depuis GitHub
+### 13.2 Mettre à jour le code depuis GitHub
 
 ```bash
 cd /var/www/form-defense
@@ -549,6 +636,9 @@ pip install -r requirements.txt
 python manage.py migrate
 python manage.py collectstatic --noinput
 systemctl restart form-defense-backend
+
+# Note: Si vous avez changé les credentials MySQL dans .env, 
+# redémarrez le service backend pour qu'il prenne en compte les nouveaux paramètres
 
 # Frontend: Mettre à jour et rebuild
 cd ../frontend
@@ -643,6 +733,23 @@ journalctl -u form-defense-backend -n 50
 cd /var/www/form-defense/backend
 source venv/bin/activate
 pip list
+
+# Vérifier la connexion MySQL
+python manage.py dbshell
+# Si erreur, vérifiez les credentials dans .env
+```
+
+### Erreur de connexion MySQL
+
+```bash
+# Vérifier que MySQL est démarré
+systemctl status mysql
+
+# Tester la connexion manuellement
+mysql -u form_defense_user -p form_defense_db
+
+# Vérifier les variables d'environnement dans .env
+cat /var/www/form-defense/backend/.env | grep DB_
 ```
 
 ### Le frontend ne démarre pas
