@@ -1,0 +1,694 @@
+# Guide de Déploiement - Form Defense
+
+Guide complet pour déployer l'application Django + Next.js sur le VPS Ubuntu (root@64.31.4.29)
+
+## 📋 Prérequis
+
+- Accès SSH au serveur: `root@64.31.4.29`
+- Repository GitHub cloné sur le serveur
+- Ubuntu Server installé
+
+---
+
+## 🔧 Étape 1: Préparation du Serveur
+
+### 1.1 Connexion SSH
+
+```bash
+ssh root@64.31.4.29
+```
+
+### 1.2 Mise à jour du système
+
+```bash
+apt update && apt upgrade -y
+```
+
+### 1.3 Installation des outils de base
+
+```bash
+apt install -y curl wget git ufw build-essential
+```
+
+---
+
+## 🐍 Étape 2: Installation de Python et dépendances
+
+### 2.1 Installation de Python 3.11+ et pip
+
+```bash
+apt install -y python3 python3-pip python3-venv python3-dev
+```
+
+### 2.2 Vérification de l'installation
+
+```bash
+python3 --version
+pip3 --version
+```
+
+---
+
+## 📦 Étape 3: Installation de Node.js et npm
+
+### 3.1 Installation de Node.js 20.x (LTS)
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+```
+
+### 3.2 Vérification de l'installation
+
+```bash
+node --version
+npm --version
+```
+
+---
+
+## 🌐 Étape 4: Installation et configuration de Nginx
+
+### 4.1 Installation de Nginx
+
+```bash
+apt install -y nginx
+```
+
+### 4.2 Démarrage et activation de Nginx
+
+```bash
+systemctl start nginx
+systemctl enable nginx
+```
+
+### 4.3 Vérification du statut
+
+```bash
+systemctl status nginx
+```
+
+---
+
+## 📁 Étape 5: Configuration de la structure du projet
+
+### 5.1 Création des répertoires
+
+```bash
+mkdir -p /var/www/form-defense
+cd /var/www/form-defense
+```
+
+### 5.2 Clonage du repository (si pas déjà fait)
+
+```bash
+# Si vous avez déjà cloné, passez à l'étape suivante
+# Sinon:
+git clone <VOTRE_REPO_GITHUB_URL> .
+```
+
+### 5.3 Vérification de la structure
+
+```bash
+ls -la
+# Vous devriez voir: backend/, frontend/, README.md, etc.
+```
+
+---
+
+## 🔙 Étape 6: Configuration du Backend Django
+
+### 6.1 Création de l'environnement virtuel Python
+
+```bash
+cd /var/www/form-defense/backend
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 6.2 Installation des dépendances Python
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 6.3 Installation de Gunicorn (serveur WSGI)
+
+```bash
+pip install gunicorn
+```
+
+### 6.4 Création du fichier .env pour les variables d'environnement
+
+```bash
+cd /var/www/form-defense/backend
+nano .env
+```
+
+**Contenu du fichier `.env`:**
+
+```env
+SECRET_KEY=votre-secret-key-tres-longue-et-securisee-generee-aleatoirement
+DEBUG=False
+ALLOWED_HOSTS=64.31.4.29,votre-domaine.com
+```
+
+**Générer une SECRET_KEY sécurisée:**
+
+```bash
+python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+### 6.5 Modification de settings.py pour la production
+
+```bash
+cd /var/www/form-defense/backend/config
+nano settings.py
+```
+
+**Modifications à apporter:**
+
+```python
+# Remplacer les lignes suivantes:
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-production')
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
+
+# Ajouter à la fin du fichier:
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_URL = '/static/'
+
+# CORS - Mettre à jour avec votre domaine/IP
+CORS_ALLOWED_ORIGINS = [
+    "http://64.31.4.29",
+    "https://64.31.4.29",
+    # Ajoutez votre domaine si vous en avez un
+]
+```
+
+### 6.6 Application des migrations
+
+```bash
+cd /var/www/form-defense/backend
+source venv/bin/activate
+python manage.py migrate
+```
+
+### 6.7 Collecte des fichiers statiques
+
+```bash
+python manage.py collectstatic --noinput
+```
+
+### 6.8 Création d'un superutilisateur (optionnel)
+
+```bash
+python manage.py createsuperuser
+```
+
+---
+
+## 🎨 Étape 7: Configuration du Frontend Next.js
+
+### 7.1 Installation des dépendances Node.js
+
+```bash
+cd /var/www/form-defense/frontend
+npm install
+```
+
+### 7.2 Modification de l'URL de l'API dans le frontend
+
+```bash
+cd /var/www/form-defense/frontend/app
+nano page.tsx
+```
+
+**Remplacer l'URL de l'API:**
+
+```typescript
+// Remplacer cette ligne:
+const response = await fetch('http://localhost:8000/api/entries/', {
+
+// Par:
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://64.31.4.29:8000';
+const response = await fetch(`${API_URL}/api/entries/`, {
+```
+
+### 7.3 Création du fichier .env.local
+
+```bash
+cd /var/www/form-defense/frontend
+nano .env.local
+```
+
+**Contenu:**
+
+```env
+NEXT_PUBLIC_API_URL=http://64.31.4.29:8000
+```
+
+### 7.4 Build de l'application Next.js
+
+```bash
+cd /var/www/form-defense/frontend
+npm run build
+```
+
+---
+
+## ⚙️ Étape 8: Configuration de Systemd pour les services
+
+### 8.1 Création du service Gunicorn pour Django
+
+```bash
+nano /etc/systemd/system/form-defense-backend.service
+```
+
+**Contenu du fichier:**
+
+```ini
+[Unit]
+Description=Form Defense Django Backend
+After=network.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/var/www/form-defense/backend
+Environment="PATH=/var/www/form-defense/backend/venv/bin"
+ExecStart=/var/www/form-defense/backend/venv/bin/gunicorn \
+    --workers 3 \
+    --bind 127.0.0.1:8000 \
+    --timeout 120 \
+    config.wsgi:application
+
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 8.2 Création du service Next.js
+
+```bash
+nano /etc/systemd/system/form-defense-frontend.service
+```
+
+**Contenu du fichier:**
+
+```ini
+[Unit]
+Description=Form Defense Next.js Frontend
+After=network.target
+
+[Service]
+User=root
+Group=root
+WorkingDirectory=/var/www/form-defense/frontend
+Environment="NODE_ENV=production"
+Environment="NEXT_PUBLIC_API_URL=http://64.31.4.29:8000"
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### 8.3 Activation et démarrage des services
+
+```bash
+# Recharger systemd
+systemctl daemon-reload
+
+# Activer les services au démarrage
+systemctl enable form-defense-backend
+systemctl enable form-defense-frontend
+
+# Démarrer les services
+systemctl start form-defense-backend
+systemctl start form-defense-frontend
+
+# Vérifier le statut
+systemctl status form-defense-backend
+systemctl status form-defense-frontend
+```
+
+---
+
+## 🔒 Étape 9: Configuration de Nginx
+
+### 9.1 Création de la configuration Nginx
+
+```bash
+nano /etc/nginx/sites-available/form-defense
+```
+
+**Contenu du fichier:**
+
+```nginx
+# Redirection HTTP vers HTTPS (optionnel, si vous avez un certificat SSL)
+# server {
+#     listen 80;
+#     server_name 64.31.4.29;
+#     return 301 https://$server_name$request_uri;
+# }
+
+# Configuration principale
+server {
+    listen 80;
+    # Si vous avez un domaine, ajoutez-le ici:
+    # listen 443 ssl http2;
+    # ssl_certificate /path/to/cert.pem;
+    # ssl_certificate_key /path/to/key.pem;
+    
+    server_name 64.31.4.29;
+
+    # Logs
+    access_log /var/log/nginx/form-defense-access.log;
+    error_log /var/log/nginx/form-defense-error.log;
+
+    # Taille maximale des uploads
+    client_max_body_size 10M;
+
+    # Frontend Next.js (port 3000)
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
+    }
+
+    # Backend Django API (port 8000)
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
+    }
+
+    # Fichiers statiques Django
+    location /static/ {
+        alias /var/www/form-defense/backend/staticfiles/;
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Fichiers statiques Next.js
+    location /_next/static/ {
+        alias /var/www/form-defense/frontend/.next/static/;
+        expires 365d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Sécurité: Masquer la version de Nginx
+    server_tokens off;
+
+    # Headers de sécurité
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+}
+```
+
+### 9.2 Activation de la configuration
+
+```bash
+# Créer le lien symbolique
+ln -s /etc/nginx/sites-available/form-defense /etc/nginx/sites-enabled/
+
+# Supprimer la configuration par défaut (optionnel)
+rm /etc/nginx/sites-enabled/default
+
+# Tester la configuration Nginx
+nginx -t
+
+# Recharger Nginx
+systemctl reload nginx
+```
+
+---
+
+## 🔥 Étape 10: Configuration du Firewall (UFW)
+
+### 10.1 Configuration des règles de pare-feu
+
+```bash
+# Autoriser SSH (IMPORTANT: faites-le en premier!)
+ufw allow 22/tcp
+
+# Autoriser HTTP
+ufw allow 80/tcp
+
+# Autoriser HTTPS (si vous utilisez SSL)
+ufw allow 443/tcp
+
+# Activer le pare-feu
+ufw enable
+
+# Vérifier le statut
+ufw status
+```
+
+---
+
+## ✅ Étape 11: Vérification et Tests
+
+### 11.1 Vérifier que les services fonctionnent
+
+```bash
+# Vérifier le backend
+curl http://127.0.0.1:8000/api/entries/
+
+# Vérifier le frontend
+curl http://127.0.0.1:3000
+
+# Vérifier via Nginx
+curl http://64.31.4.29/api/entries/
+curl http://64.31.4.29/
+```
+
+### 11.2 Vérifier les logs en cas de problème
+
+```bash
+# Logs backend
+journalctl -u form-defense-backend -f
+
+# Logs frontend
+journalctl -u form-defense-frontend -f
+
+# Logs Nginx
+tail -f /var/log/nginx/form-defense-error.log
+tail -f /var/log/nginx/form-defense-access.log
+```
+
+---
+
+## 🔄 Étape 12: Commandes de maintenance
+
+### 12.0 Script de déploiement automatique (optionnel)
+
+Un script `deploy.sh` est disponible pour automatiser les mises à jour:
+
+```bash
+cd /var/www/form-defense
+chmod +x deploy.sh
+./deploy.sh
+```
+
+Ce script:
+- Met à jour le code depuis GitHub
+- Installe les dépendances backend/frontend
+- Applique les migrations
+- Collecte les fichiers statiques
+- Build le frontend
+- Redémarre tous les services
+
+### 12.1 Redémarrer les services
+
+```bash
+# Redémarrer le backend
+systemctl restart form-defense-backend
+
+# Redémarrer le frontend
+systemctl restart form-defense-frontend
+
+# Redémarrer Nginx
+systemctl restart nginx
+```
+
+### 12.2 Mettre à jour le code depuis GitHub
+
+```bash
+cd /var/www/form-defense
+
+# Sauvegarder la base de données (si nécessaire)
+cp backend/db.sqlite3 backend/db.sqlite3.backup
+
+# Pull les dernières modifications
+git pull origin main
+
+# Backend: Mettre à jour les dépendances et migrations
+cd backend
+source venv/bin/activate
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py collectstatic --noinput
+systemctl restart form-defense-backend
+
+# Frontend: Mettre à jour et rebuild
+cd ../frontend
+npm install
+npm run build
+systemctl restart form-defense-frontend
+```
+
+---
+
+## 📝 Résumé des chemins importants
+
+```
+/var/www/form-defense/                    # Racine du projet
+├── backend/                              # Application Django
+│   ├── venv/                             # Environnement virtuel Python
+│   ├── config/                           # Configuration Django
+│   │   └── settings.py                   # Settings (modifié pour prod)
+│   ├── api/                              # Application API
+│   ├── staticfiles/                      # Fichiers statiques collectés
+│   ├── db.sqlite3                        # Base de données SQLite
+│   ├── .env                              # Variables d'environnement
+│   └── requirements.txt                  # Dépendances Python
+│
+├── frontend/                             # Application Next.js
+│   ├── .next/                            # Build de production
+│   ├── app/                              # Pages Next.js
+│   ├── .env.local                        # Variables d'environnement
+│   └── package.json                      # Dépendances Node.js
+│
+/etc/nginx/
+├── sites-available/form-defense          # Configuration Nginx
+└── sites-enabled/form-defense            # Lien symbolique activé
+
+/etc/systemd/system/
+├── form-defense-backend.service          # Service Django/Gunicorn
+└── form-defense-frontend.service         # Service Next.js
+
+/var/log/nginx/
+├── form-defense-access.log               # Logs d'accès Nginx
+└── form-defense-error.log                # Logs d'erreur Nginx
+```
+
+---
+
+## 🛡️ Sécurité supplémentaire (recommandé)
+
+### Masquer la version du serveur
+
+Déjà configuré dans Nginx avec `server_tokens off;`
+
+### Changer les ports par défaut (optionnel)
+
+Si vous voulez changer les ports pour masquer les services:
+
+1. **Modifier le port Django** (dans `/etc/systemd/system/form-defense-backend.service`):
+   ```ini
+   ExecStart=... --bind 127.0.0.1:8080 ...
+   ```
+
+2. **Modifier le port Next.js** (créer `/var/www/form-defense/frontend/.env.local`):
+   ```env
+   PORT=3001
+   ```
+
+3. **Mettre à jour Nginx** pour pointer vers les nouveaux ports
+
+### Configuration SSL/TLS (recommandé pour production)
+
+```bash
+# Installation de Certbot
+apt install -y certbot python3-certbot-nginx
+
+# Obtenir un certificat SSL (remplacer par votre domaine)
+certbot --nginx -d votre-domaine.com
+
+# Renouvellement automatique
+certbot renew --dry-run
+```
+
+---
+
+## 🐛 Dépannage
+
+### Le backend ne démarre pas
+
+```bash
+# Vérifier les logs
+journalctl -u form-defense-backend -n 50
+
+# Vérifier que le venv est activé et les dépendances installées
+cd /var/www/form-defense/backend
+source venv/bin/activate
+pip list
+```
+
+### Le frontend ne démarre pas
+
+```bash
+# Vérifier les logs
+journalctl -u form-defense-frontend -n 50
+
+# Vérifier que le build existe
+ls -la /var/www/form-defense/frontend/.next
+```
+
+### Nginx retourne 502 Bad Gateway
+
+```bash
+# Vérifier que les services backend/frontend tournent
+systemctl status form-defense-backend
+systemctl status form-defense-frontend
+
+# Vérifier les logs Nginx
+tail -f /var/log/nginx/form-defense-error.log
+```
+
+### Les fichiers statiques ne se chargent pas
+
+```bash
+# Vérifier les permissions
+chown -R root:root /var/www/form-defense/backend/staticfiles
+chmod -R 755 /var/www/form-defense/backend/staticfiles
+
+# Recollecter les fichiers statiques
+cd /var/www/form-defense/backend
+source venv/bin/activate
+python manage.py collectstatic --noinput
+```
+
+---
+
+## 📞 Support
+
+En cas de problème, vérifiez:
+1. Les logs systemd: `journalctl -u form-defense-backend -f`
+2. Les logs Nginx: `tail -f /var/log/nginx/form-defense-error.log`
+3. Les permissions des fichiers
+4. Que les ports 80, 3000, 8000 sont accessibles localement
+
+---
+
+**✅ Votre application devrait maintenant être accessible sur `http://64.31.4.29`**

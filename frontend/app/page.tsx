@@ -38,7 +38,8 @@ export default function Home() {
       // Hasher le mot de passe côté frontend avant l'envoi
       const passwordHash = await hashPassword(formData.password)
       
-      const response = await fetch('http://localhost:8000/api/entries/', {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_URL}/api/entries/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -4,6 +4,7 @@ Site minimaliste avec Django REST Framework (backend) et Next.js (frontend) pour
 
 ## Structure du projet
 
+
 ```
 form-defense/
 ├── backend/          # Django + DRF
