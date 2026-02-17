@@ -132,153 +132,164 @@ mysql -u app_user -p app_db
 # Si la connexion fonctionne, tapez EXIT;
 ```
 
-### 4.6 Installation de phpMyAdmin (optionnel mais recommandé)
+### 4.6 Installation de aaPanel (optionnel mais recommandé)
 
-phpMyAdmin permet de gérer la base de données MySQL via une interface web.
+aaPanel est un panneau de contrôle web open-source pour Linux qui permet de gérer facilement:
+- Bases de données MySQL/MariaDB
+- Sites web et domaines
+- SSL/TLS
+- FTP
+- Et bien plus encore
 
-#### 4.6.1 Installation de phpMyAdmin
-
-```bash
-# Installer PHP et les extensions nécessaires
-apt install -y php php-fpm php-mysql php-mbstring php-zip php-gd php-json php-curl
-
-# Installer phpMyAdmin
-apt install -y phpmyadmin
-```
-
-Pendant l'installation, vous serez invité à:
-- **Serveur web à configurer:** Sélectionnez `nginx` (utilisez la touche espace pour sélectionner, puis Entrée)
-- **Configurer la base de données:** Choisissez `Oui`
-- **Mot de passe de l'application:** Laissez vide ou entrez un mot de passe (optionnel)
-
-#### 4.6.2 Configuration de phpMyAdmin pour Nginx
+#### 4.6.1 Installation de aaPanel
 
 ```bash
-# Créer le lien symbolique vers phpMyAdmin
-ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
+# Télécharger et installer aaPanel
+wget -O install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh && sudo bash install.sh aapanel
 
-# Ou créer un lien dans votre projet
-ln -s /usr/share/phpmyadmin /var/www/form-defense/phpmyadmin
+# Ou pour la version en chinois:
+# wget -O install.sh http://www.aapanel.com/script/install-ubuntu_6.0.sh && sudo bash install.sh aapanel
 ```
 
-#### 4.6.3 Configuration PHP-FPM
+Pendant l'installation:
+- L'installation prendra quelques minutes
+- À la fin, vous recevrez une URL d'accès, un nom d'utilisateur et un mot de passe
+- **IMPORTANT:** Notez ces informations, vous en aurez besoin pour vous connecter
+
+#### 4.6.2 Accès à aaPanel
+
+Une fois l'installation terminée, vous verrez quelque chose comme:
+
+```
+==================================================================
+Congratulations! Installed successfully!
+==================================================================
+aaPanel Internet Address: http://64.31.4.29:7800/xxxxx
+aaPanel Internal Address: http://127.0.0.1:7800/xxxxx
+username: xxxxx
+password: xxxxx
+```
+
+**Accédez à aaPanel via:**
+- URL externe: `http://64.31.4.29:7800/xxxxx` (remplacez xxxxx par votre code unique)
+- URL interne: `http://127.0.0.1:7800/xxxxx`
+
+#### 4.6.3 Configuration initiale d'aaPanel
+
+1. **Première connexion:**
+   - Ouvrez l'URL fournie dans votre navigateur
+   - Connectez-vous avec les identifiants fournis
+
+2. **Installer les services nécessaires:**
+   - Dans le panneau, allez dans "App Store"
+   - Installez:
+     - **Nginx** (si pas déjà installé)
+     - **MySQL** (si pas déjà installé)
+     - Les autres outils selon vos besoins
+
+3. **Configuration de la base de données:**
+   - Allez dans "Database" → "MySQL"
+   - Vous pouvez créer/gérer vos bases de données directement depuis l'interface
+   - Pour notre projet, vous pouvez utiliser la base `app_db` créée précédemment
+
+#### 4.6.4 Sécurisation d'aaPanel (recommandé)
+
+**Option 1: Changer le port par défaut**
 
 ```bash
-# Vérifier que PHP-FPM est démarré
-systemctl start php7.4-fpm  # ou php8.1-fpm selon votre version
-systemctl enable php7.4-fpm
-
-# Vérifier la version PHP installée
-php -v
+# Modifier le port dans la configuration aaPanel
+# Via l'interface: Settings → Panel Settings → Change Port
+# Ou via ligne de commande:
+bt default
 ```
 
-#### 4.6.4 Ajouter phpMyAdmin à la configuration Nginx
+**Option 2: Restreindre l'accès par IP**
 
-Modifiez `/etc/nginx/sites-available/form-defense` pour ajouter la configuration phpMyAdmin:
-
-```bash
-nano /etc/nginx/sites-available/form-defense
-```
-
-Ajoutez cette section **avant** le bloc `server` principal ou **dans** le bloc server existant:
-
-```nginx
-# Configuration phpMyAdmin
-location /phpmyadmin {
-    alias /usr/share/phpmyadmin;
-    index index.php;
-    
-    location ~ ^/phpmyadmin/(.+\.php)$ {
-        alias /usr/share/phpmyadmin/$1;
-        fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;  # Ajustez selon votre version PHP
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME $request_filename;
-        include fastcgi_params;
-    }
-    
-    location ~ ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
-        alias /usr/share/phpmyadmin/$1;
-    }
-}
-```
-
-**Note:** Remplacez `php7.4-fpm` par votre version PHP (vérifiez avec `php -v` et `ls /var/run/php/`).
-
-#### 4.6.5 Sécurisation de phpMyAdmin (recommandé)
-
-Pour sécuriser l'accès à phpMyAdmin, vous pouvez:
-
-**Option 1: Restreindre l'accès par IP**
-
-Ajoutez dans la configuration Nginx:
-
-```nginx
-location /phpmyadmin {
-    # Autoriser uniquement certaines IPs (remplacez par votre IP)
-    allow 64.31.4.29;
-    allow VOTRE_IP_PUBLIQUE;
-    deny all;
-    
-    alias /usr/share/phpmyadmin;
-    # ... reste de la configuration
-}
-```
-
-**Option 2: Utiliser une authentification HTTP basique**
-
-```bash
-# Installer apache2-utils pour créer les fichiers de mot de passe
-apt install -y apache2-utils
-
-# Créer un utilisateur pour phpMyAdmin
-htpasswd -c /etc/nginx/.htpasswd admin
-# Entrez un mot de passe fort
-
-# Ajouter dans la configuration Nginx avant location /phpmyadmin:
-auth_basic "Accès phpMyAdmin";
-auth_basic_user_file /etc/nginx/.htpasswd;
-```
+Dans l'interface aaPanel:
+- Allez dans "Settings" → "Panel Settings"
+- Activez "IP Whitelist"
+- Ajoutez votre IP publique
 
 **Option 3: Changer l'URL d'accès**
 
-Au lieu de `/phpmyadmin`, utilisez une URL personnalisée:
+Dans "Settings" → "Panel Settings":
+- Changez le "Security Entry" pour une URL personnalisée
 
-```nginx
-location /db-admin-secret-url {
-    alias /usr/share/phpmyadmin;
-    # ... reste de la configuration
-}
-```
+#### 4.6.5 Gestion de la base de données via aaPanel
 
-#### 4.6.6 Recharger Nginx
+Une fois connecté à aaPanel:
 
-```bash
-# Tester la configuration
-nginx -t
+1. **Accéder à MySQL:**
+   - Allez dans "Database" → "MySQL"
+   - Vous verrez la liste de vos bases de données
 
-# Recharger Nginx
-systemctl reload nginx
-```
+2. **Gérer la base `app_db`:**
+   - Cliquez sur "Manage" à côté de `app_db`
+   - Vous pouvez:
+     - Voir les tables
+     - Exécuter des requêtes SQL
+     - Importer/Exporter des données
+     - Gérer les utilisateurs
 
-#### 4.6.7 Accéder à phpMyAdmin
+3. **Créer/modifier des utilisateurs:**
+   - Dans "Database" → "MySQL" → "Users"
+   - Vous pouvez créer de nouveaux utilisateurs ou modifier `app_user`
 
-Une fois configuré, vous pouvez accéder à phpMyAdmin via:
-- `http://64.31.4.29/phpmyadmin`
-- Ou l'URL personnalisée que vous avez définie
-
-**Identifiants de connexion:**
-- **Serveur:** `localhost` ou `127.0.0.1`
-- **Utilisateur:** `app_user`
-- **Mot de passe:** `password123`
-
-#### 4.6.8 Vérification
+#### 4.6.6 Configuration du firewall pour aaPanel
 
 ```bash
-# Vérifier que PHP-FPM fonctionne
-systemctl status php7.4-fpm
+# Autoriser le port d'aaPanel (par défaut 7800)
+ufw allow 7800/tcp
 
-# Vérifier les logs en cas d'erreur
-tail -f /var/log/nginx/form-defense-error.log
+# Vérifier le statut
+ufw status
+```
+
+**Note:** Le port par défaut d'aaPanel est 7800. Vous pouvez le changer dans les paramètres du panneau.
+
+#### 4.6.7 Commandes utiles d'aaPanel
+
+```bash
+# Redémarrer aaPanel
+bt restart
+
+# Arrêter aaPanel
+bt stop
+
+# Démarrer aaPanel
+bt start
+
+# Voir les informations du panneau
+bt default
+
+# Changer le mot de passe
+bt 5
+
+# Désinstaller aaPanel (attention!)
+bt uninstall
+```
+
+#### 4.6.8 Intégration avec votre projet
+
+aaPanel peut coexister avec votre configuration Nginx existante. Cependant, notez que:
+
+- **Si vous utilisez aaPanel pour gérer Nginx:** Vous devrez peut-être ajuster votre configuration dans l'interface d'aaPanel au lieu de modifier directement les fichiers
+- **Fichiers de configuration:** aaPanel stocke ses configurations dans `/www/server/panel/`
+- **Sites web:** Les sites créés via aaPanel sont généralement dans `/www/wwwroot/`
+
+**Recommandation:** Pour ce projet, vous pouvez utiliser aaPanel uniquement pour gérer MySQL, tout en gardant votre configuration Nginx manuelle.
+
+#### 4.6.9 Vérification
+
+```bash
+# Vérifier que aaPanel fonctionne
+systemctl status bt
+
+# Vérifier les logs
+tail -f /www/server/panel/logs/error.log
+
+# Accéder à l'interface
+# Ouvrez http://64.31.4.29:7800/xxxxx dans votre navigateur
 ```
 
 ---
@@ -670,27 +681,9 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # Configuration phpMyAdmin
-    location /phpmyadmin {
-        alias /usr/share/phpmyadmin;
-        index index.php;
-        
-        # Sécurité: Restreindre l'accès par IP (optionnel)
-        # allow 64.31.4.29;
-        # deny all;
-        
-        location ~ ^/phpmyadmin/(.+\.php)$ {
-            alias /usr/share/phpmyadmin/$1;
-            fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;  # Ajustez selon votre version PHP
-            fastcgi_index index.php;
-            fastcgi_param SCRIPT_FILENAME $request_filename;
-            include fastcgi_params;
-        }
-        
-        location ~ ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
-            alias /usr/share/phpmyadmin/$1;
-        }
-    }
+    # Note: aaPanel utilise son propre port (7800 par défaut)
+    # Pas besoin de configuration Nginx pour aaPanel
+    # Accédez directement via http://64.31.4.29:7800/xxxxx
 
     # Sécurité: Masquer la version de Nginx
     server_tokens off;
@@ -875,8 +868,8 @@ systemctl restart form-defense-frontend
 ├── form-defense-access.log               # Logs d'accès Nginx
 └── form-defense-error.log               # Logs d'erreur Nginx
 
-/usr/share/phpmyadmin/                   # Installation phpMyAdmin
-/etc/phpmyadmin/                          # Configuration phpMyAdmin
+/www/server/panel/                       # Installation et configuration aaPanel
+/www/wwwroot/                            # Sites web gérés par aaPanel (si utilisé)
 ```
 
 ---
@@ -1007,35 +1000,46 @@ source venv/bin/activate
 python manage.py collectstatic --noinput
 ```
 
-### phpMyAdmin ne fonctionne pas
+### aaPanel ne fonctionne pas
 
 ```bash
-# Vérifier que PHP-FPM est démarré
-systemctl status php7.4-fpm  # ou votre version PHP
+# Vérifier que aaPanel est démarré
+systemctl status bt
 
-# Vérifier la version PHP et le socket
-php -v
-ls /var/run/php/
+# Redémarrer aaPanel
+bt restart
 
-# Vérifier les logs Nginx
-tail -f /var/log/nginx/form-defense-error.log
+# Vérifier les logs
+tail -f /www/server/panel/logs/error.log
+
+# Vérifier le port
+netstat -tlnp | grep 7800
 
 # Vérifier les permissions
-ls -la /usr/share/phpmyadmin
-
-# Redémarrer PHP-FPM
-systemctl restart php7.4-fpm
-systemctl reload nginx
+ls -la /www/server/panel/
 ```
 
-**Erreur 502 Bad Gateway avec phpMyAdmin:**
+**Erreur de connexion à aaPanel:**
 
 ```bash
-# Vérifier que le socket PHP-FPM correspond à votre version
-ls -la /var/run/php/
+# Vérifier que le firewall autorise le port
+ufw status | grep 7800
 
-# Mettre à jour la configuration Nginx avec le bon socket
-# Exemple: unix:/var/run/php/php8.1-fpm.sock
+# Si le port n'est pas ouvert:
+ufw allow 7800/tcp
+
+# Vérifier que le service tourne
+bt status
+
+# Redémarrer le service
+bt restart
+```
+
+**Récupérer les identifiants d'accès:**
+
+```bash
+# Afficher les informations de connexion
+bt default
 ```
 
 ---
