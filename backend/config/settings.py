@@ -4,6 +4,10 @@ Django settings for config project.
 
 from pathlib import Path
 import os
+import pymysql
+
+# Configuration PyMySQL pour MySQL (compatible avec Python 3.6)
+pymysql.install_as_MySQLdb()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -78,9 +82,9 @@ if USE_MYSQL:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': os.environ.get('DB_NAME', 'form_defense_db'),
-            'USER': os.environ.get('DB_USER', 'form_defense_user'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'NAME': os.environ.get('DB_NAME', 'app_db'),
+            'USER': os.environ.get('DB_USER', 'app_user'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', 'password123'),
             'HOST': os.environ.get('DB_HOST', 'localhost'),
             'PORT': os.environ.get('DB_PORT', '3306'),
             'OPTIONS': {

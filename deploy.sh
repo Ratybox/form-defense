@@ -40,12 +40,7 @@ fi
 source venv/bin/activate
 pip install --upgrade pip
 
-# Installation des dépendances système pour mysqlclient (si nécessaire)
-if ! python -c "import MySQLdb" 2>/dev/null; then
-    echo "Installation des dépendances système pour MySQL..."
-    apt install -y default-libmysqlclient-dev pkg-config 2>/dev/null || echo "Dépendances déjà installées ou erreur (continuez)"
-fi
-
+# PyMySQL sera installé via requirements.txt, pas besoin de dépendances système
 pip install -r requirements.txt
 
 # Vérifier si .env existe

@@ -94,17 +94,17 @@ Répondez aux questions:
 mysql -u root -p
 ```
 
-Dans le prompt MySQL, exécutez les commandes suivantes (remplacez `your_secure_password` par un mot de passe fort):
+Dans le prompt MySQL, exécutez les commandes suivantes:
 
 ```sql
 -- Créer la base de données
-CREATE DATABASE form_defense_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE app_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- Créer l'utilisateur
-CREATE USER 'form_defense_user'@'localhost' IDENTIFIED BY 'your_secure_password';
+CREATE USER 'app_user'@'localhost' IDENTIFIED BY 'password123';
 
 -- Accorder les privilèges
-GRANT ALL PRIVILEGES ON form_defense_db.* TO 'form_defense_user'@'localhost';
+GRANT ALL PRIVILEGES ON app_db.* TO 'app_user'@'localhost';
 
 -- Appliquer les changements
 FLUSH PRIVILEGES;
@@ -113,17 +113,22 @@ FLUSH PRIVILEGES;
 EXIT;
 ```
 
-### 4.4 Installation des dépendances pour mysqlclient
+### 4.4 Installation des dépendances pour MySQL (optionnel avec PyMySQL)
 
+**Note:** Nous utilisons PyMySQL au lieu de mysqlclient car il est plus facile à installer et compatible avec Python 3.6.
+
+Si vous préférez utiliser mysqlclient, installez ces dépendances:
 ```bash
 apt install -y default-libmysqlclient-dev pkg-config
 ```
 
+Sinon, PyMySQL sera installé automatiquement via pip (pas besoin de dépendances système).
+
 ### 4.5 Vérification de l'installation
 
 ```bash
-mysql -u form_defense_user -p form_defense_db
-# Entrez le mot de passe que vous avez défini
+mysql -u app_user -p app_db
+# Entrez le mot de passe: password123
 # Si la connexion fonctionne, tapez EXIT;
 ```
 
@@ -213,21 +218,19 @@ nano .env
 **Contenu du fichier `.env`:**
 
 ```env
-SECRET_KEY=votre-secret-key-tres-longue-et-securisee-generee-aleatoirement
+SECRET_KEY=&6q3u%ot=f-j-fq%z@rnjz!su!()vi$h3%754idqco_t$b9klg
 DEBUG=False
-ALLOWED_HOSTS=64.31.4.29,votre-domaine.com
-CORS_ALLOWED_ORIGINS=http://64.31.4.29,https://votre-domaine.com
+ALLOWED_HOSTS=64.31.4.29,tov.afaq.sa
+CORS_ALLOWED_ORIGINS=http://64.31.4.29,https://tov.afaq.sa
 
 # Configuration MySQL
 USE_MYSQL=True
-DB_NAME=form_defense_db
-DB_USER=form_defense_user
-DB_PASSWORD=votre-mot-de-passe-mysql-securise
+DB_NAME=app_db
+DB_USER=app_user
+DB_PASSWORD=password123
 DB_HOST=localhost
 DB_PORT=3306
 ```
-
-**⚠️ IMPORTANT:** Remplacez `votre-mot-de-passe-mysql-securise` par le mot de passe que vous avez défini lors de la création de l'utilisateur MySQL à l'étape 4.3.
 
 **Générer une SECRET_KEY sécurisée:**
 
@@ -659,9 +662,13 @@ systemctl restart form-defense-frontend
 │   │   └── settings.py                   # Settings (modifié pour prod)
 │   ├── api/                              # Application API
 │   ├── staticfiles/                      # Fichiers statiques collectés
-│   ├── db.sqlite3                        # Base de données SQLite
-│   ├── .env                              # Variables d'environnement
+│   ├── .env                              # Variables d'environnement (contient credentials MySQL)
 │   └── requirements.txt                  # Dépendances Python
+│
+# Base de données MySQL
+# Base: app_db
+# Utilisateur: app_user
+# Host: localhost:3306
 │
 ├── frontend/                             # Application Next.js
 │   ├── .next/                            # Build de production
@@ -746,7 +753,8 @@ python manage.py dbshell
 systemctl status mysql
 
 # Tester la connexion manuellement
-mysql -u form_defense_user -p form_defense_db
+mysql -u app_user -p app_db
+# Entrez le mot de passe: password123
 
 # Vérifier les variables d'environnement dans .env
 cat /var/www/form-defense/backend/.env | grep DB_
