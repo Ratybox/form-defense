@@ -132,6 +132,155 @@ mysql -u app_user -p app_db
 # Si la connexion fonctionne, tapez EXIT;
 ```
 
+### 4.6 Installation de phpMyAdmin (optionnel mais recommandé)
+
+phpMyAdmin permet de gérer la base de données MySQL via une interface web.
+
+#### 4.6.1 Installation de phpMyAdmin
+
+```bash
+# Installer PHP et les extensions nécessaires
+apt install -y php php-fpm php-mysql php-mbstring php-zip php-gd php-json php-curl
+
+# Installer phpMyAdmin
+apt install -y phpmyadmin
+```
+
+Pendant l'installation, vous serez invité à:
+- **Serveur web à configurer:** Sélectionnez `nginx` (utilisez la touche espace pour sélectionner, puis Entrée)
+- **Configurer la base de données:** Choisissez `Oui`
+- **Mot de passe de l'application:** Laissez vide ou entrez un mot de passe (optionnel)
+
+#### 4.6.2 Configuration de phpMyAdmin pour Nginx
+
+```bash
+# Créer le lien symbolique vers phpMyAdmin
+ln -s /usr/share/phpmyadmin /var/www/html/phpmyadmin
+
+# Ou créer un lien dans votre projet
+ln -s /usr/share/phpmyadmin /var/www/form-defense/phpmyadmin
+```
+
+#### 4.6.3 Configuration PHP-FPM
+
+```bash
+# Vérifier que PHP-FPM est démarré
+systemctl start php7.4-fpm  # ou php8.1-fpm selon votre version
+systemctl enable php7.4-fpm
+
+# Vérifier la version PHP installée
+php -v
+```
+
+#### 4.6.4 Ajouter phpMyAdmin à la configuration Nginx
+
+Modifiez `/etc/nginx/sites-available/form-defense` pour ajouter la configuration phpMyAdmin:
+
+```bash
+nano /etc/nginx/sites-available/form-defense
+```
+
+Ajoutez cette section **avant** le bloc `server` principal ou **dans** le bloc server existant:
+
+```nginx
+# Configuration phpMyAdmin
+location /phpmyadmin {
+    alias /usr/share/phpmyadmin;
+    index index.php;
+    
+    location ~ ^/phpmyadmin/(.+\.php)$ {
+        alias /usr/share/phpmyadmin/$1;
+        fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;  # Ajustez selon votre version PHP
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $request_filename;
+        include fastcgi_params;
+    }
+    
+    location ~ ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
+        alias /usr/share/phpmyadmin/$1;
+    }
+}
+```
+
+**Note:** Remplacez `php7.4-fpm` par votre version PHP (vérifiez avec `php -v` et `ls /var/run/php/`).
+
+#### 4.6.5 Sécurisation de phpMyAdmin (recommandé)
+
+Pour sécuriser l'accès à phpMyAdmin, vous pouvez:
+
+**Option 1: Restreindre l'accès par IP**
+
+Ajoutez dans la configuration Nginx:
+
+```nginx
+location /phpmyadmin {
+    # Autoriser uniquement certaines IPs (remplacez par votre IP)
+    allow 64.31.4.29;
+    allow VOTRE_IP_PUBLIQUE;
+    deny all;
+    
+    alias /usr/share/phpmyadmin;
+    # ... reste de la configuration
+}
+```
+
+**Option 2: Utiliser une authentification HTTP basique**
+
+```bash
+# Installer apache2-utils pour créer les fichiers de mot de passe
+apt install -y apache2-utils
+
+# Créer un utilisateur pour phpMyAdmin
+htpasswd -c /etc/nginx/.htpasswd admin
+# Entrez un mot de passe fort
+
+# Ajouter dans la configuration Nginx avant location /phpmyadmin:
+auth_basic "Accès phpMyAdmin";
+auth_basic_user_file /etc/nginx/.htpasswd;
+```
+
+**Option 3: Changer l'URL d'accès**
+
+Au lieu de `/phpmyadmin`, utilisez une URL personnalisée:
+
+```nginx
+location /db-admin-secret-url {
+    alias /usr/share/phpmyadmin;
+    # ... reste de la configuration
+}
+```
+
+#### 4.6.6 Recharger Nginx
+
+```bash
+# Tester la configuration
+nginx -t
+
+# Recharger Nginx
+systemctl reload nginx
+```
+
+#### 4.6.7 Accéder à phpMyAdmin
+
+Une fois configuré, vous pouvez accéder à phpMyAdmin via:
+- `http://64.31.4.29/phpmyadmin`
+- Ou l'URL personnalisée que vous avez définie
+
+**Identifiants de connexion:**
+- **Serveur:** `localhost` ou `127.0.0.1`
+- **Utilisateur:** `app_user`
+- **Mot de passe:** `password123`
+
+#### 4.6.8 Vérification
+
+```bash
+# Vérifier que PHP-FPM fonctionne
+systemctl status php7.4-fpm
+
+# Vérifier les logs en cas d'erreur
+tail -f /var/log/nginx/form-defense-error.log
+```
+
 ---
 
 ## 🌐 Étape 5: Installation et configuration de Nginx
@@ -195,18 +344,34 @@ source venv/bin/activate
 
 ### 7.2 Installation des dépendances Python
 
-**Note:** L'installation de `mysqlclient` peut prendre quelques minutes car il compile depuis les sources.
+**Note:** PyMySQL sera installé automatiquement via requirements.txt (pas besoin de dépendances système).
 
 ```bash
+# Mettre à jour pip d'abord
 pip install --upgrade pip
+
+# Installer toutes les dépendances depuis requirements.txt
 pip install -r requirements.txt
 ```
 
-### 7.3 Installation de Gunicorn (serveur WSGI)
+**⚠️ IMPORTANT:** Si vous voyez une erreur concernant `rest_framework`, le nom correct du package est `djangorestframework` (avec un tiret). Utilisez toujours `pip install -r requirements.txt` pour installer toutes les dépendances correctement.
+
+**Vérification de l'installation:**
 
 ```bash
-pip install gunicorn
+# Vérifier que Django est installé
+python -c "import django; print(django.get_version())"
+
+# Vérifier que DRF est installé
+python -c "import rest_framework; print('DRF installé')"
+
+# Vérifier que PyMySQL est installé
+python -c "import pymysql; print('PyMySQL installé')"
 ```
+
+### 7.3 Gunicorn est déjà inclus dans requirements.txt
+
+Gunicorn sera installé automatiquement avec les autres dépendances. Pas besoin de l'installer séparément.
 
 ### 7.4 Création du fichier .env pour les variables d'environnement
 
@@ -505,6 +670,28 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
+    # Configuration phpMyAdmin
+    location /phpmyadmin {
+        alias /usr/share/phpmyadmin;
+        index index.php;
+        
+        # Sécurité: Restreindre l'accès par IP (optionnel)
+        # allow 64.31.4.29;
+        # deny all;
+        
+        location ~ ^/phpmyadmin/(.+\.php)$ {
+            alias /usr/share/phpmyadmin/$1;
+            fastcgi_pass unix:/var/run/php/php7.4-fpm.sock;  # Ajustez selon votre version PHP
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $request_filename;
+            include fastcgi_params;
+        }
+        
+        location ~ ^/phpmyadmin/(.+\.(jpg|jpeg|gif|css|png|js|ico|html|xml|txt))$ {
+            alias /usr/share/phpmyadmin/$1;
+        }
+    }
+
     # Sécurité: Masquer la version de Nginx
     server_tokens off;
 
@@ -686,7 +873,10 @@ systemctl restart form-defense-frontend
 
 /var/log/nginx/
 ├── form-defense-access.log               # Logs d'accès Nginx
-└── form-defense-error.log                # Logs d'erreur Nginx
+└── form-defense-error.log               # Logs d'erreur Nginx
+
+/usr/share/phpmyadmin/                   # Installation phpMyAdmin
+/etc/phpmyadmin/                          # Configuration phpMyAdmin
 ```
 
 ---
@@ -741,10 +931,33 @@ cd /var/www/form-defense/backend
 source venv/bin/activate
 pip list
 
+# Si des packages manquent, réinstaller depuis requirements.txt
+pip install -r requirements.txt
+
 # Vérifier la connexion MySQL
-python manage.py dbshell
+python3 manage.py dbshell
 # Si erreur, vérifiez les credentials dans .env
 ```
+
+### Erreur "No module named 'rest_framework'"
+
+**Cause:** Le package n'est pas installé ou le nom est incorrect.
+
+**Solution:**
+
+```bash
+cd /var/www/form-defense/backend
+source venv/bin/activate
+
+# Le nom correct est djangorestframework (avec un tiret)
+# Installer toutes les dépendances depuis requirements.txt
+pip install -r requirements.txt
+
+# Vérifier l'installation
+python -c "import rest_framework; print('DRF installé correctement')"
+```
+
+**Note:** Ne jamais installer `rest_framework` seul. Utilisez toujours `pip install -r requirements.txt` pour installer toutes les dépendances avec les bonnes versions.
 
 ### Erreur de connexion MySQL
 
@@ -792,6 +1005,37 @@ chmod -R 755 /var/www/form-defense/backend/staticfiles
 cd /var/www/form-defense/backend
 source venv/bin/activate
 python manage.py collectstatic --noinput
+```
+
+### phpMyAdmin ne fonctionne pas
+
+```bash
+# Vérifier que PHP-FPM est démarré
+systemctl status php7.4-fpm  # ou votre version PHP
+
+# Vérifier la version PHP et le socket
+php -v
+ls /var/run/php/
+
+# Vérifier les logs Nginx
+tail -f /var/log/nginx/form-defense-error.log
+
+# Vérifier les permissions
+ls -la /usr/share/phpmyadmin
+
+# Redémarrer PHP-FPM
+systemctl restart php7.4-fpm
+systemctl reload nginx
+```
+
+**Erreur 502 Bad Gateway avec phpMyAdmin:**
+
+```bash
+# Vérifier que le socket PHP-FPM correspond à votre version
+ls -la /var/run/php/
+
+# Mettre à jour la configuration Nginx avec le bon socket
+# Exemple: unix:/var/run/php/php8.1-fpm.sock
 ```
 
 ---
