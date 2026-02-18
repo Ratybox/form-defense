@@ -1,26 +1,25 @@
 """
 Django settings for config project.
+
+- Development: SQLite3 (default, no .env needed)
+- Production:  MySQL via PyMySQL (set USE_MYSQL=True in .env)
 """
 
 from pathlib import Path
 import os
-import pymysql
 
-# Configuration PyMySQL pour MySQL (compatible avec Python 3.6)
-pymysql.install_as_MySQLdb()
+from dotenv import load_dotenv
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load .env file if it exists (production server)
+load_dotenv(BASE_DIR / '.env')
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
+# --- Core ---
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-production')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
 
@@ -71,21 +70,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/4.2/ref/settings/#databases
+# --- Database ---
+# SQLite3 for local dev (default), MySQL for production (USE_MYSQL=True)
 
-# Configuration MySQL pour la production
-# Pour le développement local, utilisez SQLite en définissant USE_MYSQL=False dans .env
-USE_MYSQL = os.environ.get('USE_MYSQL', 'True') == 'True'
+if os.environ.get('USE_MYSQL', 'False') == 'True':
+    import pymysql
+    pymysql.install_as_MySQLdb()
 
-if USE_MYSQL:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.mysql',
-            'NAME': os.environ.get('DB_NAME', 'app_db'),
-            'USER': os.environ.get('DB_USER', 'app_user'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', 'password123'),
-            'HOST': os.environ.get('DB_HOST', 'localhost'),
+            'NAME': os.environ.get('DB_NAME', 'form_defense_db'),
+            'USER': os.environ.get('DB_USER', 'form_defense_user'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+            'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
             'PORT': os.environ.get('DB_PORT', '3306'),
             'OPTIONS': {
                 'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
@@ -94,7 +92,6 @@ if USE_MYSQL:
         }
     }
 else:
-    # SQLite pour le développement local
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -103,8 +100,7 @@ else:
     }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
+# --- Password validation ---
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -122,8 +118,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 
-# Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
+# --- Internationalization ---
 
 LANGUAGE_CODE = 'en-us'
 
@@ -134,30 +129,44 @@ USE_I18N = True
 USE_TZ = True
 
 
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
+# --- Static files ---
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
+# Dossiers statiques supplémentaires pour l'admin personnalisé
+STATICFILES_DIRS = [
+    BASE_DIR / 'api' / 'static',
+]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# REST Framework
+# --- REST Framework ---
+
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10
+    'PAGE_SIZE': 10,
 }
 
-# CORS
+# --- CORS ---
+
 CORS_ALLOWED_ORIGINS = os.environ.get(
     'CORS_ALLOWED_ORIGINS',
-    'http://localhost:3000,http://64.31.4.29'
+    'http://localhost:3000,http://64.31.4.29,https://tov.afaq.sa,http://tov.afaq.sa'
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
+
+# --- Security (production) ---
+
+if not DEBUG:
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    CSRF_TRUSTED_ORIGINS = os.environ.get(
+        'CSRF_TRUSTED_ORIGINS',
+        'https://tov.afaq.sa,http://64.31.4.29'
+    ).split(',')

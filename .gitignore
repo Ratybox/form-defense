@@ -12,6 +12,7 @@ dist/
 build/
 db.sqlite3
 
+.claude/
 # Django
 *.log
 local_settings.py

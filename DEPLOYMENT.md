@@ -1,646 +1,540 @@
-# Guide de Déploiement - Form Defense
+# Form Defense - Production Deployment Guide
 
-Guide complet pour déployer l'application Django + Next.js sur le VPS Ubuntu (root@64.31.4.29)
-
-## 📋 Prérequis
-
-- Accès SSH au serveur: `root@64.31.4.29`
-- Repository GitHub cloné sur le serveur
-- Ubuntu Server installé
+> **Server:** `root@64.31.4.29`
+> **Domain:** `tov.afaq.sa`
+> **Stack:** Django 5.1 (Gunicorn) + Next.js 14 + MySQL + Nginx + aaPanel
+> **OS:** Ubuntu 24.04 LTS (Noble Numbat)
 
 ---
 
-## 🔧 Étape 1: Préparation du Serveur
+## Table of Contents
 
-### 1.1 Connexion SSH
+1. [Prerequisites](#1-prerequisites)
+2. [aaPanel Installation (FIRST)](#2-aapanel-installation-first)
+3. [System Dependencies](#3-system-dependencies)
+4. [MySQL Setup](#4-mysql-setup)
+5. [Project Setup](#5-project-setup)
+6. [Backend Configuration (Django)](#6-backend-configuration-django)
+7. [Frontend Configuration (Next.js)](#7-frontend-configuration-nextjs)
+8. [Systemd Services](#8-systemd-services)
+9. [Nginx Configuration](#9-nginx-configuration)
+10. [SSL/TLS Certificate](#10-ssltls-certificate)
+11. [Firewall (UFW)](#11-firewall-ufw)
+12. [Verification](#12-verification)
+13. [deploy.sh - Automated Updates](#13-deploysh---automated-updates)
+14. [Maintenance & Troubleshooting](#14-maintenance--troubleshooting)
+15. [File Map](#15-file-map)
+
+---
+
+## 1. Prerequisites
+
+- SSH access: `ssh root@64.31.4.29`
+- Domain `tov.afaq.sa` DNS A record pointing to `64.31.4.29`
+- GitHub repository cloned or accessible
 
 ```bash
 ssh root@64.31.4.29
 ```
 
-### 1.2 Mise à jour du système
+Update the system first:
 
 ```bash
 apt update && apt upgrade -y
-```
-
-### 1.3 Installation des outils de base
-
-```bash
-apt install -y curl wget git ufw build-essential
+apt install -y curl wget git ufw build-essential software-properties-common
 ```
 
 ---
 
-## 🐍 Étape 2: Installation de Python et dépendances
+## 2. aaPanel Installation (FIRST)
 
-### 2.1 Installation de Python 3.11+ et pip
+> **IMPORTANT:** Install aaPanel BEFORE deploying the app. aaPanel installs its own
+> Nginx/MySQL stack. We will use aaPanel's Nginx and MySQL for the app.
 
-```bash
-apt install -y python3 python3-pip python3-venv python3-dev
-```
-
-### 2.2 Vérification de l'installation
+### 2.1 Install aaPanel
 
 ```bash
-python3 --version
-pip3 --version
+wget -O install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh && bash install.sh aapanel
 ```
 
----
-
-## 📦 Étape 3: Installation de Node.js et npm
-
-### 3.1 Installation de Node.js 20.x (LTS)
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
-```
-
-### 3.2 Vérification de l'installation
-
-```bash
-node --version
-npm --version
-```
-
----
-
-## 🗄️ Étape 4: Installation et configuration de MySQL
-
-### 4.1 Installation de MySQL Server
-
-```bash
-apt install -y mysql-server
-```
-
-### 4.2 Sécurisation de MySQL (optionnel mais recommandé)
-
-```bash
-mysql_secure_installation
-```
-
-Répondez aux questions:
-- **Valider le mot de passe?** → `Y` puis entrez un mot de passe root fort
-- **Supprimer les utilisateurs anonymes?** → `Y`
-- **Désactiver la connexion root à distance?** → `Y`
-- **Supprimer la base de test?** → `Y`
-- **Recharger les privilèges?** → `Y`
-
-### 4.3 Création de la base de données et de l'utilisateur
-
-```bash
-mysql -u root -p
-```
-
-Dans le prompt MySQL, exécutez les commandes suivantes:
-
-```sql
--- Créer la base de données
-CREATE DATABASE app_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
--- Créer l'utilisateur
-CREATE USER 'app_user'@'localhost' IDENTIFIED BY 'password123';
-
--- Accorder les privilèges
-GRANT ALL PRIVILEGES ON app_db.* TO 'app_user'@'localhost';
-
--- Appliquer les changements
-FLUSH PRIVILEGES;
-
--- Quitter MySQL
-EXIT;
-```
-
-### 4.4 Installation des dépendances pour MySQL (optionnel avec PyMySQL)
-
-**Note:** Nous utilisons PyMySQL au lieu de mysqlclient car il est plus facile à installer et compatible avec Python 3.6.
-
-Si vous préférez utiliser mysqlclient, installez ces dépendances:
-```bash
-apt install -y default-libmysqlclient-dev pkg-config
-```
-
-Sinon, PyMySQL sera installé automatiquement via pip (pas besoin de dépendances système).
-
-### 4.5 Vérification de l'installation
-
-```bash
-mysql -u app_user -p app_db
-# Entrez le mot de passe: password123
-# Si la connexion fonctionne, tapez EXIT;
-```
-
-### 4.6 Installation de aaPanel (optionnel mais recommandé)
-
-aaPanel est un panneau de contrôle web open-source pour Linux qui permet de gérer facilement:
-- Bases de données MySQL/MariaDB
-- Sites web et domaines
-- SSL/TLS
-- FTP
-- Et bien plus encore
-
-#### 4.6.1 Installation de aaPanel
-
-```bash
-# Télécharger et installer aaPanel
-wget -O install.sh http://www.aapanel.com/script/install-ubuntu_6.0_en.sh && sudo bash install.sh aapanel
-
-# Ou pour la version en chinois:
-# wget -O install.sh http://www.aapanel.com/script/install-ubuntu_6.0.sh && sudo bash install.sh aapanel
-```
-
-Pendant l'installation:
-- L'installation prendra quelques minutes
-- À la fin, vous recevrez une URL d'accès, un nom d'utilisateur et un mot de passe
-- **IMPORTANT:** Notez ces informations, vous en aurez besoin pour vous connecter
-
-#### 4.6.2 Accès à aaPanel
-
-Une fois l'installation terminée, vous verrez quelque chose comme:
+At the end of installation you will see:
 
 ```
 ==================================================================
 Congratulations! Installed successfully!
 ==================================================================
-aaPanel Internet Address: http://64.31.4.29:7800/xxxxx
-aaPanel Internal Address: http://127.0.0.1:7800/xxxxx
-username: xxxxx
-password: xxxxx
+aaPanel Internet Address: http://64.31.4.29:7800/XXXXXX
+aaPanel Internal Address: http://127.0.0.1:7800/XXXXXX
+username: XXXXXX
+password: XXXXXX
+==================================================================
 ```
 
-**Accédez à aaPanel via:**
-- URL externe: `http://64.31.4.29:7800/xxxxx` (remplacez xxxxx par votre code unique)
-- URL interne: `http://127.0.0.1:7800/xxxxx`
+**Save these credentials immediately.**
 
-#### 4.6.3 Configuration initiale d'aaPanel
+### 2.2 First Login & Software Selection
 
-1. **Première connexion:**
-   - Ouvrez l'URL fournie dans votre navigateur
-   - Connectez-vous avec les identifiants fournis
+1. Open `http://64.31.4.29:7800/XXXXXX` in your browser.
+2. Log in with the provided credentials.
+3. aaPanel will prompt you to install a software stack. Choose **LNMP**:
+   - **Nginx** (REQUIRED - select Nginx, NOT Apache)
+   - **MySQL 5.7 or 8.0** (REQUIRED)
+   - **PHP** (optional - useful for phpMyAdmin)
+   - **phpMyAdmin** (optional - GUI for MySQL management)
+4. Click **One-Click Install** and wait for installation to complete.
 
-2. **Installer les services nécessaires:**
-   - Dans le panneau, allez dans "App Store"
-   - Installez:
-     - **Nginx** (si pas déjà installé)
-     - **MySQL** (si pas déjà installé)
-     - Les autres outils selon vos besoins
+> **CRITICAL:** You MUST select **LNMP** (Linux + **Nginx** + MySQL + PHP),
+> NOT LAMP (Linux + Apache). The entire deployment relies on Nginx as the
+> reverse proxy. Apache will conflict with the configuration below.
 
-3. **Configuration de la base de données:**
-   - Allez dans "Database" → "MySQL"
-   - Vous pouvez créer/gérer vos bases de données directement depuis l'interface
-   - Pour notre projet, vous pouvez utiliser la base `app_db` créée précédemment
+### 2.3 Verify aaPanel Services
 
-#### 4.6.4 Sécurisation d'aaPanel (recommandé)
-
-**Option 1: Changer le port par défaut**
+After installation, confirm the services are running:
 
 ```bash
-# Modifier le port dans la configuration aaPanel
-# Via l'interface: Settings → Panel Settings → Change Port
-# Ou via ligne de commande:
+# Check Nginx installed by aaPanel
+/www/server/nginx/sbin/nginx -v
+
+# Check MySQL installed by aaPanel
+mysql --version
+
+# Check aaPanel status
 bt default
 ```
 
-**Option 2: Restreindre l'accès par IP**
+### 2.4 Secure aaPanel
 
-Dans l'interface aaPanel:
-- Allez dans "Settings" → "Panel Settings"
-- Activez "IP Whitelist"
-- Ajoutez votre IP publique
+From aaPanel **Settings > Panel Settings**:
 
-**Option 3: Changer l'URL d'accès**
+| Setting | Action |
+|---------|--------|
+| Panel Port | Change from `7800` to a custom port (e.g., `7923`) |
+| Security Entry | Change the `/XXXXXX` path to a custom one |
+| Panel Username | Change to a non-default username |
+| Panel Password | Set a strong password |
+| Authorized IPs | Add only your personal IP (optional) |
 
-Dans "Settings" → "Panel Settings":
-- Changez le "Security Entry" pour une URL personnalisée
-
-#### 4.6.5 Gestion de la base de données via aaPanel
-
-Une fois connecté à aaPanel:
-
-1. **Accéder à MySQL:**
-   - Allez dans "Database" → "MySQL"
-   - Vous verrez la liste de vos bases de données
-
-2. **Gérer la base `app_db`:**
-   - Cliquez sur "Manage" à côté de `app_db`
-   - Vous pouvez:
-     - Voir les tables
-     - Exécuter des requêtes SQL
-     - Importer/Exporter des données
-     - Gérer les utilisateurs
-
-3. **Créer/modifier des utilisateurs:**
-   - Dans "Database" → "MySQL" → "Users"
-   - Vous pouvez créer de nouveaux utilisateurs ou modifier `app_user`
-
-#### 4.6.6 Configuration du firewall pour aaPanel
+After changing the port:
 
 ```bash
-# Autoriser le port d'aaPanel (par défaut 7800)
-ufw allow 7800/tcp
-
-# Vérifier le statut
-ufw status
+# Allow the new aaPanel port in UFW
+ufw allow 7923/tcp
+ufw deny 7800/tcp
 ```
 
-**Note:** Le port par défaut d'aaPanel est 7800. Vous pouvez le changer dans les paramètres du panneau.
-
-#### 4.6.7 Commandes utiles d'aaPanel
+### 2.5 aaPanel Useful Commands
 
 ```bash
-# Redémarrer aaPanel
-bt restart
-
-# Arrêter aaPanel
-bt stop
-
-# Démarrer aaPanel
-bt start
-
-# Voir les informations du panneau
-bt default
-
-# Changer le mot de passe
-bt 5
-
-# Désinstaller aaPanel (attention!)
-bt uninstall
-```
-
-#### 4.6.8 Intégration avec votre projet
-
-aaPanel peut coexister avec votre configuration Nginx existante. Cependant, notez que:
-
-- **Si vous utilisez aaPanel pour gérer Nginx:** Vous devrez peut-être ajuster votre configuration dans l'interface d'aaPanel au lieu de modifier directement les fichiers
-- **Fichiers de configuration:** aaPanel stocke ses configurations dans `/www/server/panel/`
-- **Sites web:** Les sites créés via aaPanel sont généralement dans `/www/wwwroot/`
-
-**Recommandation:** Pour ce projet, vous pouvez utiliser aaPanel uniquement pour gérer MySQL, tout en gardant votre configuration Nginx manuelle.
-
-#### 4.6.9 Vérification
-
-```bash
-# Vérifier que aaPanel fonctionne
-systemctl status bt
-
-# Vérifier les logs
-tail -f /www/server/panel/logs/error.log
-
-# Accéder à l'interface
-# Ouvrez http://64.31.4.29:7800/xxxxx dans votre navigateur
+bt default          # Show panel URL, username, port
+bt restart          # Restart aaPanel
+bt stop             # Stop aaPanel
+bt start            # Start aaPanel
+bt 5                # Change password
+bt 14               # Show panel port
 ```
 
 ---
 
-## 🌐 Étape 5: Installation et configuration de Nginx
+## 3. System Dependencies
 
-### 4.1 Installation de Nginx
+> aaPanel installs Nginx and MySQL. You still need Python and Node.js.
+
+### 3.1 Python 3.10+
 
 ```bash
-apt install -y nginx
+apt install -y python3 python3-pip python3-venv python3-dev
+python3 --version
 ```
 
-### 4.2 Démarrage et activation de Nginx
+### 3.2 Node.js 20.x LTS
 
 ```bash
-systemctl start nginx
-systemctl enable nginx
-```
-
-### 4.3 Vérification du statut
-
-```bash
-systemctl status nginx
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+node --version && npm --version
 ```
 
 ---
 
-## 📁 Étape 6: Configuration de la structure du projet
+## 4. MySQL Setup
 
-### 5.1 Création des répertoires
+> MySQL was installed by aaPanel in step 2. Now we create the database and user
+> for the application. You can do this via CLI or via aaPanel GUI.
+
+### 4.1 Option A: Create Database & User via CLI
 
 ```bash
-mkdir -p /var/www/form-defense
+# Connect to MySQL as root
+# aaPanel sets a root password during install - find it in aaPanel > Database > root password
+mysql -u root -p
+```
+
+Run the following SQL commands:
+
+```sql
+-- Create the database with UTF-8 support
+CREATE DATABASE form_defense_db
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+-- Create a dedicated user (replace YOUR_STRONG_PASSWORD with a real password)
+CREATE USER 'form_defense_user'@'127.0.0.1'
+  IDENTIFIED BY 'YOUR_STRONG_PASSWORD';
+
+-- Also allow connection from 'localhost' (some drivers use localhost vs 127.0.0.1)
+CREATE USER 'form_defense_user'@'localhost'
+  IDENTIFIED BY 'YOUR_STRONG_PASSWORD';
+
+-- Grant all privileges on the app database only
+GRANT ALL PRIVILEGES ON form_defense_db.*
+  TO 'form_defense_user'@'127.0.0.1';
+
+GRANT ALL PRIVILEGES ON form_defense_db.*
+  TO 'form_defense_user'@'localhost';
+
+-- Apply changes
+FLUSH PRIVILEGES;
+
+-- Verify the database was created
+SHOW DATABASES;
+
+-- Verify the user was created
+SELECT User, Host FROM mysql.user WHERE User = 'form_defense_user';
+
+EXIT;
+```
+
+### 4.2 Option B: Create Database via aaPanel GUI
+
+1. Open aaPanel in your browser.
+2. Go to **Database** in the left sidebar.
+3. Click **Add Database**.
+4. Fill in:
+   - **Database Name:** `form_defense_db`
+   - **Username:** `form_defense_user`
+   - **Password:** click Generate or enter a strong password
+   - **Access:** Local Server Only
+   - **Character Set:** `utf8mb4`
+5. Click **Submit**.
+
+> **Note:** Copy the password you set - it goes into `backend/.env` as `DB_PASSWORD`.
+
+### 4.3 Find MySQL Root Password (if needed)
+
+If you forgot the root password set by aaPanel:
+
+```bash
+# View root password from aaPanel
+bt default
+# Or check in aaPanel GUI: Database > root password (eye icon)
+```
+
+### 4.4 Verify Database Connection
+
+```bash
+# Test connection with the app user
+mysql -u form_defense_user -p -h 127.0.0.1 form_defense_db
+
+# Inside MySQL, verify:
+SHOW TABLES;    -- Should be empty for now
+STATUS;         -- Shows connection info and charset
+EXIT;
+```
+
+### 4.5 MySQL Security Hardening
+
+```bash
+# Run the MySQL secure installation script
+mysql_secure_installation
+```
+
+Answer the prompts:
+
+| Prompt | Answer |
+|--------|--------|
+| Validate password plugin? | `Y` |
+| Password strength | Choose `MEDIUM` or `STRONG` |
+| Remove anonymous users? | `Y` |
+| Disallow root login remotely? | `Y` |
+| Remove test database? | `Y` |
+| Reload privilege tables? | `Y` |
+
+---
+
+## 5. Project Setup
+
+### 5.1 Clone Repository
+
+```bash
+mkdir -p /var/www
+cd /var/www
+git clone <YOUR_GITHUB_REPO_URL> form-defense
 cd /var/www/form-defense
 ```
 
-### 5.2 Clonage du repository (si pas déjà fait)
+### 5.2 Directory Structure (expected)
 
-```bash
-# Si vous avez déjà cloné, passez à l'étape suivante
-# Sinon:
-git clone <VOTRE_REPO_GITHUB_URL> .
 ```
-
-### 5.3 Vérification de la structure
-
-```bash
-ls -la
-# Vous devriez voir: backend/, frontend/, README.md, etc.
+/var/www/form-defense/
+├── backend/          # Django + DRF
+├── frontend/         # Next.js 14
+├── deploy.sh         # Automated deploy script
+├── DEPLOYMENT.md     # This file
+└── README.md
 ```
 
 ---
 
-## 🔙 Étape 7: Configuration du Backend Django
+## 6. Backend Configuration (Django)
 
-### 6.1 Création de l'environnement virtuel Python
+### 6.1 Virtual Environment & Dependencies
 
 ```bash
 cd /var/www/form-defense/backend
 python3 -m venv venv
 source venv/bin/activate
-```
-
-### 7.2 Installation des dépendances Python
-
-**Note:** PyMySQL sera installé automatiquement via requirements.txt (pas besoin de dépendances système).
-
-```bash
-# Mettre à jour pip d'abord
 pip install --upgrade pip
-
-# Installer toutes les dépendances depuis requirements.txt
 pip install -r requirements.txt
 ```
 
-**⚠️ IMPORTANT:** Si vous voyez une erreur concernant `rest_framework`, le nom correct du package est `djangorestframework` (avec un tiret). Utilisez toujours `pip install -r requirements.txt` pour installer toutes les dépendances correctement.
-
-**Vérification de l'installation:**
+Verify installation:
 
 ```bash
-# Vérifier que Django est installé
-python -c "import django; print(django.get_version())"
-
-# Vérifier que DRF est installé
-python -c "import rest_framework; print('DRF installé')"
-
-# Vérifier que PyMySQL est installé
-python -c "import pymysql; print('PyMySQL installé')"
+python -c "import django; print(f'Django {django.get_version()}')"
+python -c "import rest_framework; print('DRF OK')"
+python -c "import pymysql; print('PyMySQL OK')"
+python -c "import dotenv; print('python-dotenv OK')"
 ```
 
-### 7.3 Gunicorn est déjà inclus dans requirements.txt
-
-Gunicorn sera installé automatiquement avec les autres dépendances. Pas besoin de l'installer séparément.
-
-### 7.4 Création du fichier .env pour les variables d'environnement
+### 6.2 Create Production `.env`
 
 ```bash
-cd /var/www/form-defense/backend
+cp .env.example .env
 nano .env
 ```
 
-**Contenu du fichier `.env`:**
+Fill in the values:
 
 ```env
-SECRET_KEY=&6q3u%ot=f-j-fq%z@rnjz!su!()vi$h3%754idqco_t$b9klg
+# --- Django Core ---
+SECRET_KEY=<GENERATE_ONE_BELOW>
 DEBUG=False
 ALLOWED_HOSTS=64.31.4.29,tov.afaq.sa
-CORS_ALLOWED_ORIGINS=http://64.31.4.29,https://tov.afaq.sa
+CORS_ALLOWED_ORIGINS=https://tov.afaq.sa,http://tov.afaq.sa,http://64.31.4.29
+CSRF_TRUSTED_ORIGINS=https://tov.afaq.sa,http://64.31.4.29
 
-# Configuration MySQL
+# --- MySQL Database ---
 USE_MYSQL=True
-DB_NAME=app_db
-DB_USER=app_user
-DB_PASSWORD=password123
-DB_HOST=localhost
+DB_NAME=form_defense_db
+DB_USER=form_defense_user
+DB_PASSWORD=YOUR_STRONG_PASSWORD
+DB_HOST=127.0.0.1
 DB_PORT=3306
 ```
 
-**Générer une SECRET_KEY sécurisée:**
+Generate a Django SECRET_KEY:
 
 ```bash
 python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
 ```
 
-### 7.5 Vérification de la connexion à MySQL
+Copy the output and paste it as the `SECRET_KEY` value in `.env`.
 
-Avant de continuer, testez la connexion:
+### 6.3 Verify Database Connection from Django
 
 ```bash
-cd /var/www/form-defense/backend
 source venv/bin/activate
 python manage.py dbshell
 ```
 
-Si la connexion fonctionne, vous verrez le prompt MySQL. Tapez `exit;` pour quitter.
+You should see the MySQL prompt (`mysql>`). Type `EXIT;` to quit.
 
-### 7.6 Modification de settings.py pour la production
+If you get a connection error, double-check:
+- `DB_PASSWORD` in `.env` matches what you set in step 4
+- `DB_HOST` is `127.0.0.1`
+- MySQL service is running: `systemctl status mysql`
 
-```bash
-cd /var/www/form-defense/backend/config
-nano settings.py
-```
-
-**Modifications à apporter:**
-
-```python
-# Remplacer les lignes suivantes:
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-change-me-in-production')
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
-
-# Ajouter à la fin du fichier:
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATIC_URL = '/static/'
-
-# CORS - Mettre à jour avec votre domaine/IP
-CORS_ALLOWED_ORIGINS = [
-    "http://64.31.4.29",
-    "https://64.31.4.29",
-    # Ajoutez votre domaine si vous en avez un
-]
-```
-
-### 7.7 Application des migrations
+### 6.4 Run Migrations & Collect Static Files
 
 ```bash
-cd /var/www/form-defense/backend
 source venv/bin/activate
+
+# Create all database tables
 python manage.py migrate
-```
 
-### 7.8 Collecte des fichiers statiques
+# Verify tables were created
+python manage.py dbshell -c "SHOW TABLES;"
 
-```bash
+# Collect static files for Nginx to serve
+# This includes Django admin static files and custom admin CSS
 python manage.py collectstatic --noinput
-```
 
-### 7.9 Création d'un superutilisateur (optionnel)
-
-```bash
+# Create admin superuser (optional but recommended)
 python manage.py createsuperuser
 ```
 
+**Note:** The custom admin CSS file (`api/static/admin/css/custom_admin.css`) will be automatically collected during `collectstatic`. This CSS file removes white backgrounds and ensures proper dark theme compatibility for the Django admin interface.
+
 ---
 
-## 🎨 Étape 8: Configuration du Frontend Next.js
+## 7. Frontend Configuration (Next.js)
 
-### 8.1 Installation des dépendances Node.js
+### 7.1 Install Dependencies
 
 ```bash
 cd /var/www/form-defense/frontend
 npm install
 ```
 
-### 8.2 Modification de l'URL de l'API dans le frontend
+### 7.2 Create Production `.env.local`
 
 ```bash
-cd /var/www/form-defense/frontend/app
-nano page.tsx
-```
-
-**Remplacer l'URL de l'API:**
-
-```typescript
-// Remplacer cette ligne:
-const response = await fetch('http://localhost:8000/api/entries/', {
-
-// Par:
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://64.31.4.29:8000';
-const response = await fetch(`${API_URL}/api/entries/`, {
-```
-
-### 8.3 Création du fichier .env.local
-
-```bash
-cd /var/www/form-defense/frontend
+cp .env.example .env.local
 nano .env.local
 ```
 
-**Contenu:**
+Content:
 
 ```env
-NEXT_PUBLIC_API_URL=http://64.31.4.29:8000
+NEXT_PUBLIC_API_URL=https://tov.afaq.sa
 ```
 
-### 8.4 Build de l'application Next.js
+> In production, the frontend calls the API through the same domain via Nginx.
+> Nginx proxies `/api/` requests to Gunicorn on port 8000 internally.
+> No direct port exposure is needed.
+
+### 7.3 Build
 
 ```bash
-cd /var/www/form-defense/frontend
 npm run build
 ```
 
 ---
 
-## ⚙️ Étape 9: Configuration de Systemd pour les services
+## 8. Systemd Services
 
-### 9.1 Création du service Gunicorn pour Django
+### 8.1 Create Log Directory
+
+```bash
+mkdir -p /var/log/form-defense
+```
+
+### 8.2 Backend Service (Gunicorn)
 
 ```bash
 nano /etc/systemd/system/form-defense-backend.service
 ```
 
-**Contenu du fichier:**
-
 ```ini
 [Unit]
-Description=Form Defense Django Backend
-After=network.target
+Description=Form Defense - Django Backend (Gunicorn)
+After=network.target mysql.service
+Requires=mysql.service
 
 [Service]
 User=root
 Group=root
 WorkingDirectory=/var/www/form-defense/backend
-Environment="PATH=/var/www/form-defense/backend/venv/bin"
+EnvironmentFile=/var/www/form-defense/backend/.env
 ExecStart=/var/www/form-defense/backend/venv/bin/gunicorn \
     --workers 3 \
     --bind 127.0.0.1:8000 \
     --timeout 120 \
+    --access-logfile /var/log/form-defense/gunicorn-access.log \
+    --error-logfile /var/log/form-defense/gunicorn-error.log \
     config.wsgi:application
-
 Restart=always
-RestartSec=10
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-### 9.2 Création du service Next.js
+### 8.3 Frontend Service (Next.js)
 
 ```bash
 nano /etc/systemd/system/form-defense-frontend.service
 ```
 
-**Contenu du fichier:**
-
 ```ini
 [Unit]
-Description=Form Defense Next.js Frontend
+Description=Form Defense - Next.js Frontend
 After=network.target
 
 [Service]
 User=root
 Group=root
 WorkingDirectory=/var/www/form-defense/frontend
-Environment="NODE_ENV=production"
-Environment="NEXT_PUBLIC_API_URL=http://64.31.4.29:8000"
+Environment=NODE_ENV=production
+Environment=PORT=3000
+EnvironmentFile=/var/www/form-defense/frontend/.env.local
 ExecStart=/usr/bin/npm start
 Restart=always
-RestartSec=10
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-### 9.3 Activation et démarrage des services
+### 8.4 Enable & Start Services
 
 ```bash
-# Recharger systemd
 systemctl daemon-reload
+systemctl enable form-defense-backend form-defense-frontend
+systemctl start form-defense-backend form-defense-frontend
 
-# Activer les services au démarrage
-systemctl enable form-defense-backend
-systemctl enable form-defense-frontend
-
-# Démarrer les services
-systemctl start form-defense-backend
-systemctl start form-defense-frontend
-
-# Vérifier le statut
+# Verify both are running
 systemctl status form-defense-backend
 systemctl status form-defense-frontend
 ```
 
 ---
 
-## 🔒 Étape 10: Configuration de Nginx
+## 9. Nginx Configuration
 
-### 10.1 Création de la configuration Nginx
+> aaPanel installs Nginx at `/www/server/nginx/`. Its config structure differs
+> from the standard apt-installed Nginx. We create our server block in
+> aaPanel's vhost directory.
+
+### 9.1 Determine Nginx Config Path
 
 ```bash
-nano /etc/nginx/sites-available/form-defense
+# aaPanel Nginx config location
+ls /www/server/panel/vhost/nginx/
+
+# If using standard apt Nginx instead:
+ls /etc/nginx/sites-available/
 ```
 
-**Contenu du fichier:**
+### 9.2 Create Server Block (aaPanel Nginx)
+
+```bash
+nano /www/server/panel/vhost/nginx/form-defense.conf
+```
+
+> **Alternative:** If you installed Nginx via apt (not aaPanel), use
+> `/etc/nginx/sites-available/form-defense` and symlink to `sites-enabled/`.
 
 ```nginx
-# Redirection HTTP vers HTTPS (optionnel, si vous avez un certificat SSL)
-# server {
-#     listen 80;
-#     server_name 64.31.4.29;
-#     return 301 https://$server_name$request_uri;
-# }
-
-# Configuration principale
 server {
     listen 80;
-    # Si vous avez un domaine, ajoutez-le ici:
-    # listen 443 ssl http2;
-    # ssl_certificate /path/to/cert.pem;
-    # ssl_certificate_key /path/to/key.pem;
-    
-    server_name 64.31.4.29;
+    server_name tov.afaq.sa 64.31.4.29;
 
-    # Logs
+    # --- Logging ---
     access_log /var/log/nginx/form-defense-access.log;
-    error_log /var/log/nginx/form-defense-error.log;
+    error_log  /var/log/nginx/form-defense-error.log;
 
-    # Taille maximale des uploads
+    # --- Limits ---
     client_max_body_size 10M;
 
-    # Frontend Next.js (port 3000)
+    # --- Security Headers ---
+    server_tokens off;
+    add_header X-Frame-Options "DENY" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # --- Frontend (Next.js on port 3000) ---
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
@@ -655,7 +549,7 @@ server {
         proxy_connect_timeout 75s;
     }
 
-    # Backend Django API (port 8000)
+    # --- Backend API (Gunicorn on port 8000) ---
     location /api/ {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
@@ -667,112 +561,200 @@ server {
         proxy_connect_timeout 75s;
     }
 
-    # Fichiers statiques Django
+    # --- Django Admin (proxied to Gunicorn) ---
+    location /admin/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # --- Django Static Files ---
     location /static/ {
         alias /var/www/form-defense/backend/staticfiles/;
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
 
-    # Fichiers statiques Next.js
+    # --- Next.js Static Assets ---
     location /_next/static/ {
         alias /var/www/form-defense/frontend/.next/static/;
         expires 365d;
         add_header Cache-Control "public, immutable";
     }
-
-    # Note: aaPanel utilise son propre port (7800 par défaut)
-    # Pas besoin de configuration Nginx pour aaPanel
-    # Accédez directement via http://64.31.4.29:7800/xxxxx
-
-    # Sécurité: Masquer la version de Nginx
-    server_tokens off;
-
-    # Headers de sécurité
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
 }
 ```
 
-### 10.2 Activation de la configuration
+### 9.3 Enable the Site
+
+**If using aaPanel Nginx:**
 
 ```bash
-# Créer le lien symbolique
-ln -s /etc/nginx/sites-available/form-defense /etc/nginx/sites-enabled/
+# Test config
+/www/server/nginx/sbin/nginx -t
 
-# Supprimer la configuration par défaut (optionnel)
-rm /etc/nginx/sites-enabled/default
+# Reload
+/www/server/nginx/sbin/nginx -s reload
+```
 
-# Tester la configuration Nginx
+**If using apt Nginx:**
+
+```bash
+ln -sf /etc/nginx/sites-available/form-defense /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
 nginx -t
-
-# Recharger Nginx
 systemctl reload nginx
 ```
 
+### 9.4 Adding the Site via aaPanel GUI (alternative)
+
+If you prefer using aaPanel's interface:
+
+1. Go to **Website** > **Add Site**
+2. Domain: `tov.afaq.sa`
+3. After creation, click the site name to open settings
+4. Go to **Config** tab
+5. Replace the entire server block with the Nginx config above
+6. Click **Save**
+
 ---
 
-## 🔥 Étape 11: Configuration du Firewall (UFW)
+## 10. SSL/TLS Certificate
 
-### 11.1 Configuration des règles de pare-feu
+### 10.1 Via aaPanel (recommended - simplest)
+
+1. In aaPanel, go to **Website** > click on `tov.afaq.sa`
+2. Go to the **SSL** tab
+3. Select **Let's Encrypt**
+4. Check the domain `tov.afaq.sa`
+5. Click **Apply**
+6. Enable **Force HTTPS** toggle
+
+### 10.2 Via Certbot (alternative)
 
 ```bash
-# Autoriser SSH (IMPORTANT: faites-le en premier!)
+apt install -y certbot
+
+# For aaPanel Nginx:
+certbot certonly --webroot -w /var/www/form-defense/frontend -d tov.afaq.sa
+
+# For apt Nginx:
+apt install -y python3-certbot-nginx
+certbot --nginx -d tov.afaq.sa
+```
+
+Verify auto-renewal:
+
+```bash
+certbot renew --dry-run
+```
+
+### 10.3 Post-SSL: Update Environment
+
+After SSL is active, ensure these values use `https://`:
+
+**`backend/.env`:**
+```env
+CORS_ALLOWED_ORIGINS=https://tov.afaq.sa,http://64.31.4.29
+CSRF_TRUSTED_ORIGINS=https://tov.afaq.sa
+```
+
+**`frontend/.env.local`:**
+```env
+NEXT_PUBLIC_API_URL=https://tov.afaq.sa
+```
+
+Then restart services:
+
+```bash
+systemctl restart form-defense-backend form-defense-frontend
+```
+
+---
+
+## 11. Firewall (UFW)
+
+```bash
+# SSH - ALWAYS allow this first
 ufw allow 22/tcp
 
-# Autoriser HTTP
+# HTTP & HTTPS
 ufw allow 80/tcp
-
-# Autoriser HTTPS (si vous utilisez SSL)
 ufw allow 443/tcp
 
-# Activer le pare-feu
+# aaPanel (use your custom port from step 2.4)
+ufw allow 7923/tcp
+
+# Enable firewall
 ufw enable
 
-# Vérifier le statut
-ufw status
+# Verify
+ufw status numbered
 ```
+
+> **DO NOT** expose ports 3000 or 8000 externally. They are accessed only by Nginx
+> on `127.0.0.1`. This is intentional for the defense scenario.
 
 ---
 
-## ✅ Étape 12: Vérification et Tests
+## 12. Verification
 
-### 12.1 Vérifier que les services fonctionnent
-
-```bash
-# Vérifier le backend
-curl http://127.0.0.1:8000/api/entries/
-
-# Vérifier le frontend
-curl http://127.0.0.1:3000
-
-# Vérifier via Nginx
-curl http://64.31.4.29/api/entries/
-curl http://64.31.4.29/
-```
-
-### 12.2 Vérifier les logs en cas de problème
+### 12.1 Service Health
 
 ```bash
-# Logs backend
-journalctl -u form-defense-backend -f
-
-# Logs frontend
-journalctl -u form-defense-frontend -f
-
-# Logs Nginx
-tail -f /var/log/nginx/form-defense-error.log
-tail -f /var/log/nginx/form-defense-access.log
+systemctl status form-defense-backend
+systemctl status form-defense-frontend
+systemctl status mysql
+# aaPanel Nginx:
+/www/server/nginx/sbin/nginx -t
+# Or apt Nginx:
+systemctl status nginx
 ```
+
+### 12.2 Endpoint Tests
+
+```bash
+# Backend API (internal - should return JSON)
+curl -s http://127.0.0.1:8000/api/entries/ | head -c 200
+
+# Frontend (internal - should return HTML)
+curl -s http://127.0.0.1:3000 | head -c 200
+
+# Through Nginx (external)
+curl -s http://tov.afaq.sa/api/entries/
+curl -s http://tov.afaq.sa/
+```
+
+### 12.3 MySQL Connection
+
+```bash
+cd /var/www/form-defense/backend
+source venv/bin/activate
+python manage.py dbshell
+# Should show mysql> prompt. Type: SHOW TABLES; then EXIT;
+```
+
+### 12.4 Django Admin
+
+Open `https://tov.afaq.sa/admin/` in your browser and log in with the superuser credentials you created.
+
+**Admin Features:**
+- Custom admin interface optimized for dark theme
+- Enhanced form entry display with message preview, hash preview, and age indicators
+- Advanced filtering by creation date
+- Search functionality across name, email, message, and password hash
+- Entry statistics showing message length, word count, hash length, and creation date
+- Export selected entries to CSV
+- All interface text in English
+credentials created in step 6.4.
 
 ---
 
-## 🔄 Étape 13: Commandes de maintenance
+## 13. deploy.sh - Automated Updates
 
-### 13.0 Script de déploiement automatique (optionnel)
-
-Un script `deploy.sh` est disponible pour automatiser les mises à jour:
+A `deploy.sh` script is included in the repository root. For subsequent deployments:
 
 ```bash
 cd /var/www/form-defense
@@ -780,278 +762,139 @@ chmod +x deploy.sh
 ./deploy.sh
 ```
 
-Ce script:
-- Met à jour le code depuis GitHub
-- Installe les dépendances backend/frontend
-- Applique les migrations
-- Collecte les fichiers statiques
-- Build le frontend
-- Redémarre tous les services
+This script pulls the latest code, installs dependencies, runs migrations,
+builds the frontend, and restarts all services.
 
-### 13.1 Redémarrer les services
+---
+
+## 14. Maintenance & Troubleshooting
+
+### Logs
 
 ```bash
-# Redémarrer le backend
-systemctl restart form-defense-backend
+# Gunicorn (Django)
+journalctl -u form-defense-backend -f
+tail -f /var/log/form-defense/gunicorn-error.log
 
-# Redémarrer le frontend
-systemctl restart form-defense-frontend
+# Next.js
+journalctl -u form-defense-frontend -f
 
-# Redémarrer Nginx
-systemctl restart nginx
+# Nginx (aaPanel)
+tail -f /www/wwwlogs/form-defense-access.log
+tail -f /www/wwwlogs/form-defense-error.log
+# Or standard Nginx:
+tail -f /var/log/nginx/form-defense-error.log
+
+# MySQL
+tail -f /var/log/mysql/error.log
+
+# aaPanel
+tail -f /www/server/panel/logs/error.log
 ```
 
-### 13.2 Mettre à jour le code depuis GitHub
+### Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| `502 Bad Gateway` | Backend/frontend service is down. Check `systemctl status` for both services |
+| `No module named 'rest_framework'` | `source venv/bin/activate && pip install -r requirements.txt` |
+| MySQL connection refused | Verify `DB_HOST=127.0.0.1` and `DB_PASSWORD` in `.env`, check `systemctl status mysql` |
+| `OperationalError: access denied` | Re-check MySQL user/password created in step 4 matches `.env` |
+| Static files 404 | Run `python manage.py collectstatic --noinput`, check `alias` paths in Nginx config, verify `STATICFILES_DIRS` in settings.py includes `api/static` |
+| Admin CSS not loading | Ensure `api/static/admin/css/custom_admin.css` exists, run `collectstatic`, check browser cache |
+| SSL cert expired | aaPanel: Website > SSL > Renew. Or: `certbot renew` |
+| aaPanel inaccessible | Check port with `bt default`, verify UFW allows it |
+| Nginx config test fails | aaPanel: `/www/server/nginx/sbin/nginx -t`. apt: `nginx -t` |
+
+### Service Restart
 
 ```bash
-cd /var/www/form-defense
+systemctl restart form-defense-backend form-defense-frontend
 
-# Sauvegarder la base de données (si nécessaire)
-cp backend/db.sqlite3 backend/db.sqlite3.backup
+# aaPanel Nginx:
+/www/server/nginx/sbin/nginx -s reload
+# apt Nginx:
+systemctl reload nginx
+```
 
-# Pull les dernières modifications
-git pull origin main
+### Database Backup
 
-# Backend: Mettre à jour les dépendances et migrations
-cd backend
-source venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py collectstatic --noinput
-systemctl restart form-defense-backend
+```bash
+mkdir -p /root/backups
+mysqldump -u form_defense_user -p form_defense_db > /root/backups/form_defense_db_$(date +%F).sql
+```
 
-# Note: Si vous avez changé les credentials MySQL dans .env, 
-# redémarrez le service backend pour qu'il prenne en compte les nouveaux paramètres
+### Database Restore
 
-# Frontend: Mettre à jour et rebuild
-cd ../frontend
-npm install
-npm run build
-systemctl restart form-defense-frontend
+```bash
+mysql -u form_defense_user -p form_defense_db < /root/backups/form_defense_db_YYYY-MM-DD.sql
 ```
 
 ---
 
-## 📝 Résumé des chemins importants
+## 15. File Map
 
 ```
-/var/www/form-defense/                    # Racine du projet
-├── backend/                              # Application Django
-│   ├── venv/                             # Environnement virtuel Python
-│   ├── config/                           # Configuration Django
-│   │   └── settings.py                   # Settings (modifié pour prod)
-│   ├── api/                              # Application API
-│   ├── staticfiles/                      # Fichiers statiques collectés
-│   ├── .env                              # Variables d'environnement (contient credentials MySQL)
-│   └── requirements.txt                  # Dépendances Python
-│
-# Base de données MySQL
-# Base: app_db
-# Utilisateur: app_user
-# Host: localhost:3306
-│
-├── frontend/                             # Application Next.js
-│   ├── .next/                            # Build de production
-│   ├── app/                              # Pages Next.js
-│   ├── .env.local                        # Variables d'environnement
-│   └── package.json                      # Dépendances Node.js
-│
-/etc/nginx/
-├── sites-available/form-defense          # Configuration Nginx
-└── sites-enabled/form-defense            # Lien symbolique activé
+Server filesystem:
+==================
+
+/var/www/form-defense/                     # Project root
+├── backend/
+│   ├── .env                               # Production env vars (MySQL creds, SECRET_KEY)
+│   ├── venv/                              # Python virtual environment
+│   ├── config/settings.py                 # Django settings (reads .env via python-dotenv)
+│   ├── api/                               # API application
+│   │   └── static/                        # Custom static files
+│   │       └── admin/css/
+│   │           └── custom_admin.css       # Custom admin dark theme CSS
+│   ├── staticfiles/                       # Collected static files (served by Nginx)
+│   └── requirements.txt                   # Python dependencies
+├── frontend/
+│   ├── .env.local                         # Frontend env vars (API URL)
+│   └── .next/                             # Production build output
+├── deploy.sh                              # Automated deployment script
+└── DEPLOYMENT.md                          # This guide
 
 /etc/systemd/system/
-├── form-defense-backend.service          # Service Django/Gunicorn
-└── form-defense-frontend.service         # Service Next.js
+├── form-defense-backend.service           # Gunicorn service (port 8000)
+└── form-defense-frontend.service          # Next.js service (port 3000)
 
-/var/log/nginx/
-├── form-defense-access.log               # Logs d'accès Nginx
-└── form-defense-error.log               # Logs d'erreur Nginx
+Nginx config (aaPanel):
+/www/server/panel/vhost/nginx/form-defense.conf
 
-/www/server/panel/                       # Installation et configuration aaPanel
-/www/wwwroot/                            # Sites web gérés par aaPanel (si utilisé)
+Nginx config (apt - alternative):
+/etc/nginx/sites-available/form-defense -> /etc/nginx/sites-enabled/
+
+Logs:
+/var/log/form-defense/                     # Gunicorn access & error logs
+/var/log/nginx/form-defense-*.log          # Nginx access & error logs (apt)
+/www/wwwlogs/                              # Nginx logs (aaPanel)
+
+aaPanel:
+/www/server/panel/                         # aaPanel installation
+/www/server/nginx/                         # Nginx installed by aaPanel
+/www/server/mysql/                         # MySQL installed by aaPanel
 ```
 
 ---
 
-## 🛡️ Sécurité supplémentaire (recommandé)
+## Deployment Order Summary
 
-### Masquer la version du serveur
-
-Déjà configuré dans Nginx avec `server_tokens off;`
-
-### Changer les ports par défaut (optionnel)
-
-Si vous voulez changer les ports pour masquer les services:
-
-1. **Modifier le port Django** (dans `/etc/systemd/system/form-defense-backend.service`):
-   ```ini
-   ExecStart=... --bind 127.0.0.1:8080 ...
-   ```
-
-2. **Modifier le port Next.js** (créer `/var/www/form-defense/frontend/.env.local`):
-   ```env
-   PORT=3001
-   ```
-
-3. **Mettre à jour Nginx** pour pointer vers les nouveaux ports
-
-### Configuration SSL/TLS (recommandé pour production)
-
-```bash
-# Installation de Certbot
-apt install -y certbot python3-certbot-nginx
-
-# Obtenir un certificat SSL (remplacer par votre domaine)
-certbot --nginx -d votre-domaine.com
-
-# Renouvellement automatique
-certbot renew --dry-run
 ```
-
----
-
-## 🐛 Dépannage
-
-### Le backend ne démarre pas
-
-```bash
-# Vérifier les logs
-journalctl -u form-defense-backend -n 50
-
-# Vérifier que le venv est activé et les dépendances installées
-cd /var/www/form-defense/backend
-source venv/bin/activate
-pip list
-
-# Si des packages manquent, réinstaller depuis requirements.txt
-pip install -r requirements.txt
-
-# Vérifier la connexion MySQL
-python3 manage.py dbshell
-# Si erreur, vérifiez les credentials dans .env
+ 1. SSH into server
+ 2. Install aaPanel               <- installs Nginx (NOT Apache) + MySQL
+ 3. Secure aaPanel                <- change port, password, entry URL
+ 4. Install Python + Node.js
+ 5. Create MySQL database + user  <- via aaPanel GUI or CLI
+ 6. Secure MySQL                  <- mysql_secure_installation
+ 7. Clone project to /var/www/
+ 8. Configure backend .env        <- MySQL creds, SECRET_KEY
+ 9. Run migrations + collectstatic (includes custom admin CSS)
+10. Configure frontend .env.local
+11. Build frontend (npm run build)
+12. Create systemd services
+13. Configure Nginx server block
+14. Enable SSL (via aaPanel or Certbot)
+15. Configure UFW firewall
+16. Verify everything works
 ```
-
-### Erreur "No module named 'rest_framework'"
-
-**Cause:** Le package n'est pas installé ou le nom est incorrect.
-
-**Solution:**
-
-```bash
-cd /var/www/form-defense/backend
-source venv/bin/activate
-
-# Le nom correct est djangorestframework (avec un tiret)
-# Installer toutes les dépendances depuis requirements.txt
-pip install -r requirements.txt
-
-# Vérifier l'installation
-python -c "import rest_framework; print('DRF installé correctement')"
-```
-
-**Note:** Ne jamais installer `rest_framework` seul. Utilisez toujours `pip install -r requirements.txt` pour installer toutes les dépendances avec les bonnes versions.
-
-### Erreur de connexion MySQL
-
-```bash
-# Vérifier que MySQL est démarré
-systemctl status mysql
-
-# Tester la connexion manuellement
-mysql -u app_user -p app_db
-# Entrez le mot de passe: password123
-
-# Vérifier les variables d'environnement dans .env
-cat /var/www/form-defense/backend/.env | grep DB_
-```
-
-### Le frontend ne démarre pas
-
-```bash
-# Vérifier les logs
-journalctl -u form-defense-frontend -n 50
-
-# Vérifier que le build existe
-ls -la /var/www/form-defense/frontend/.next
-```
-
-### Nginx retourne 502 Bad Gateway
-
-```bash
-# Vérifier que les services backend/frontend tournent
-systemctl status form-defense-backend
-systemctl status form-defense-frontend
-
-# Vérifier les logs Nginx
-tail -f /var/log/nginx/form-defense-error.log
-```
-
-### Les fichiers statiques ne se chargent pas
-
-```bash
-# Vérifier les permissions
-chown -R root:root /var/www/form-defense/backend/staticfiles
-chmod -R 755 /var/www/form-defense/backend/staticfiles
-
-# Recollecter les fichiers statiques
-cd /var/www/form-defense/backend
-source venv/bin/activate
-python manage.py collectstatic --noinput
-```
-
-### aaPanel ne fonctionne pas
-
-```bash
-# Vérifier que aaPanel est démarré
-systemctl status bt
-
-# Redémarrer aaPanel
-bt restart
-
-# Vérifier les logs
-tail -f /www/server/panel/logs/error.log
-
-# Vérifier le port
-netstat -tlnp | grep 7800
-
-# Vérifier les permissions
-ls -la /www/server/panel/
-```
-
-**Erreur de connexion à aaPanel:**
-
-```bash
-# Vérifier que le firewall autorise le port
-ufw status | grep 7800
-
-# Si le port n'est pas ouvert:
-ufw allow 7800/tcp
-
-# Vérifier que le service tourne
-bt status
-
-# Redémarrer le service
-bt restart
-```
-
-**Récupérer les identifiants d'accès:**
-
-```bash
-# Afficher les informations de connexion
-bt default
-```
-
----
-
-## 📞 Support
-
-En cas de problème, vérifiez:
-1. Les logs systemd: `journalctl -u form-defense-backend -f`
-2. Les logs Nginx: `tail -f /var/log/nginx/form-defense-error.log`
-3. Les permissions des fichiers
-4. Que les ports 80, 3000, 8000 sont accessibles localement
-
----
-
-**✅ Votre application devrait maintenant être accessible sur `http://64.31.4.29`**

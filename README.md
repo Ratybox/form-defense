@@ -19,13 +19,35 @@ form-defense/
 
 ### Backend (Django)
 
+**⚠️ IMPORTANT:** Ce projet nécessite Python 3.11 ou 3.12. Python 3.13 n'est pas compatible avec Django 3.2.25.
+
 ```bash
 cd backend
-python3 -m venv venv
+
+# Vérifier votre version Python (doit être 3.11 ou 3.12)
+python3 --version
+
+# Si vous avez Python 3.13, installez Python 3.11 ou 3.12:
+# Sur macOS avec Homebrew:
+# brew install python@3.11
+# ou
+# brew install python@3.12
+
+# Créer l'environnement virtuel avec Python 3.11 ou 3.12
+python3.11 -m venv venv  # ou python3.12 -m venv venv
 source venv/bin/activate  # Sur Windows: venv\Scripts\activate
+
+# Installer les dépendances
+pip install --upgrade pip
 pip install -r requirements.txt
+
+# Appliquer les migrations
 python manage.py migrate
-python manage.py createsuperuser  # Optionnel pour l'admin
+
+# Créer un superutilisateur (optionnel)
+python manage.py createsuperuser
+
+# Démarrer le serveur
 python manage.py runserver
 ```
 

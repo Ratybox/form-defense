@@ -1,0 +1,127 @@
+/* Styles personnalisés pour l'admin Django - Thème sombre */
+
+/* Supprimer les fonds blancs des champs de formulaire */
+.admin .form-row input[type="text"],
+.admin .form-row input[type="email"],
+.admin .form-row textarea,
+.admin .form-row select {
+    background-color: #1f2937 !important;
+    color: #f3f4f6 !important;
+    border-color: #374151 !important;
+}
+
+.admin .form-row input[type="text"]:focus,
+.admin .form-row input[type="email"]:focus,
+.admin .form-row textarea:focus,
+.admin .form-row select:focus {
+    background-color: #111827 !important;
+    border-color: #60a5fa !important;
+    color: #f3f4f6 !important;
+}
+
+/* Supprimer les fonds blancs des tableaux */
+.admin #result_list tbody tr,
+.admin #result_list thead th {
+    background-color: transparent !important;
+    color: inherit !important;
+}
+
+.admin #result_list tbody tr:hover {
+    background-color: #374151 !important;
+}
+
+/* Supprimer les fonds blancs de la barre de recherche */
+.admin #searchbar {
+    background-color: #1f2937 !important;
+    color: #f3f4f6 !important;
+    border-color: #374151 !important;
+}
+
+.admin #searchbar:focus {
+    background-color: #111827 !important;
+    border-color: #60a5fa !important;
+}
+
+/* Supprimer les fonds blancs des filtres */
+.admin #changelist-filter {
+    background-color: transparent !important;
+    border-color: #374151 !important;
+}
+
+.admin #changelist-filter h3 {
+    color: #f3f4f6 !important;
+}
+
+.admin #changelist-filter li {
+    color: #d1d5db !important;
+}
+
+.admin #changelist-filter li.selected {
+    background-color: #374151 !important;
+}
+
+.admin #changelist-filter a {
+    color: #d1d5db !important;
+}
+
+.admin #changelist-filter a:hover {
+    color: #60a5fa !important;
+}
+
+/* Supprimer les fonds blancs des selects et dropdowns */
+.admin select,
+.admin .form-row select {
+    background-color: #1f2937 !important;
+    color: #f3f4f6 !important;
+    border-color: #374151 !important;
+}
+
+/* Supprimer les fonds blancs des checkboxes */
+.admin input[type="checkbox"] {
+    background-color: #1f2937 !important;
+    border-color: #374151 !important;
+}
+
+/* Styles pour les éléments readonly */
+.admin .readonly {
+    background-color: transparent !important;
+    color: inherit !important;
+}
+
+/* Supprimer les fonds blancs des divs de statistiques et messages */
+.admin div[style*="background"] {
+    background-color: transparent !important;
+}
+
+/* Assurer que le texte est lisible */
+.admin code {
+    background-color: transparent !important;
+    color: #4a9eff !important;
+}
+
+.admin pre {
+    background-color: transparent !important;
+    color: inherit !important;
+}
+
+/* Supprimer les fonds blancs des tooltips */
+.admin .help,
+.admin .help-text {
+    color: #9ca3af !important;
+}
+
+/* Styles pour les champs dans les fieldsets */
+.admin fieldset {
+    background-color: transparent !important;
+    border-color: #374151 !important;
+}
+
+.admin fieldset legend {
+    color: #f3f4f6 !important;
+}
+
+/* Supprimer les fonds blancs des messages */
+.admin .messagelist li {
+    background-color: #374151 !important;
+    color: #f3f4f6 !important;
+}
